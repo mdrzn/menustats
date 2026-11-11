@@ -278,6 +278,37 @@ struct AgentsTab: View {
     }
 }
 
+struct ClaudeInfoView: View {
+    let info: ClaudeSessionInfo
+    let busy: Bool
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 12) {
+                if let model = info.model { tok(L("Modello"), model.replacingOccurrences(of: "claude-", with: "")) }
+                tok(L("Token"), formatTokens(info.totalTokens))
+                tok(L("Output"), formatTokens(info.outputTokens))
+                tok(L("Cache"), formatTokens(info.cacheReadTokens))
+                Spacer()
+            }
+            if let t = info.lastText {
+                Text(t.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces))
+                    .font(.ui(10.5)).foregroundStyle(Theme.secondary).lineLimit(2)
+                    .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.04)))
+            }
+            if !busy, let last = info.lastActivity, Date().timeIntervalSince(last) > 60 {
+                Text(L("In attesa da %@", formatDuration(Date().timeIntervalSince(last)))).font(.ui(10)).foregroundStyle(Theme.warning)
+            }
+        }
+    }
+    func tok(_ k: String, _ v: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(k).font(.ui(9.5)).foregroundStyle(Theme.tertiary)
+            Text(v).font(.number(11, .medium)).lineLimit(1)
+        }
+    }
+}
+
 struct AgentCard: View {
     let a: AgentSession
     @ObservedObject var s = Prefs.shared
@@ -311,6 +342,7 @@ struct AgentCard: View {
                 if let t = a.terminal { stat(L("Terminale"), t) }
                 Spacer()
             }
+            if let cs = a.claude { ClaudeInfoView(info: cs, busy: a.isBusy) }
             HStack(spacing: 6) {
                 ForEach(a.ports, id: \.self) { p in
                     Button { NSWorkspace.shared.open(URL(string: "http://localhost:\(p)")!) } label: { Badge(text: ":\(p)", color: s.accent) }.buttonStyle(.plain)
@@ -333,6 +365,9 @@ struct AgentCard: View {
 
 // ================================================================ Sveglio
 struct AwakeTab: View {
+    func autoRow(_ t: String, _ v: Binding<Bool>) -> some View {
+        HStack { Text(t).font(.ui(11.5)); Spacer(); Toggle("", isOn: v).toggleStyle(.switch).labelsHidden().controlSize(.mini) }
+    }
     @ObservedObject var m = Monitor.shared
     @ObservedObject var awake = Monitor.shared.awake
     @ObservedObject var s = Prefs.shared
@@ -365,6 +400,14 @@ struct AwakeTab: View {
                 Segmented(options: [(AwakeController.Mode.system, L("Solo il Mac")), (.display, L("Mac e schermo"))],
                           selection: Binding(get: { awake.mode }, set: { awake.mode = $0; if awake.isActive { awake.start(minutes: awake.remaining.map { Int($0 / 60) }) } }),
                           accent: s.accent)
+            }
+            Card(title: L("Automatico"), trailing: awake.autoReason == nil ? nil : L("attivo")) {
+                if let r = awake.autoReason {
+                    HStack(spacing: 6) { Dot(color: s.accent, size: 6); Text(L("Sveglio perché %@", r)).font(.ui(11.5, .medium)) }
+                }
+                autoRow(L("Mentre un agente AI è al lavoro"), $s.c.awakeWhenAgents)
+                autoRow(L("Mentre c'è un server di sviluppo acceso"), $s.c.awakeWhenServers)
+                autoRow(L("Quando è collegato all'alimentatore"), $s.c.awakeOnAC)
             }
             Card(title: L("Chi impedisce lo stop"), trailing: m.blockers.isEmpty ? nil : "\(m.blockers.count)") {
                 if m.blockers.isEmpty { Text(L("Nessuna app sta tenendo sveglio il Mac.")).font(.ui(11)).foregroundStyle(Theme.tertiary) }

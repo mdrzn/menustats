@@ -9,7 +9,18 @@ final class AwakeController: ObservableObject {
     @Published private(set) var isActive = false
     @Published var mode: Mode = .system
     private var assertion: IOPMAssertionID = 0
+    private var autoAssertion: IOPMAssertionID = 0
+    @Published private(set) var autoReason: String?     // "tieni sveglio" automatico attivo, e perche'
     private var timer: Timer?
+
+    // Regola automatica (agenti, server, alimentatore): asserzione separata da quella manuale
+    func setAuto(_ reason: String?) {
+        if autoAssertion != 0 { IOPMAssertionRelease(autoAssertion); autoAssertion = 0 }
+        autoReason = reason
+        guard reason != nil else { return }
+        IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleSystemSleep as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                                    "MenuStats: keep awake (automatic)" as CFString, &autoAssertion)
+    }
 
     func start(minutes: Int?) {
         stop()

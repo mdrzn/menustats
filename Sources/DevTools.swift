@@ -113,6 +113,7 @@ struct AgentSession: Identifiable {
     var children: Int
     var ports: [Int]
     var terminal: String?      // iTerm2, Terminale, VS Code…
+    var claude: ClaudeSessionInfo? = nil   // token e ultimo messaggio (solo Claude Code)
     var project: String { cwd.map { ($0 as NSString).lastPathComponent } ?? "?" }
     var isBusy: Bool { cpu > 3 }
 }
@@ -205,7 +206,10 @@ func annotate(_ ports: [ListeningPort], processes: [ProcessSample], agents: [Age
     }
 }
 
-func killProcess(_ pid: pid_t, force: Bool = false) { kill(pid, force ? SIGKILL : SIGTERM) }
+func killProcess(_ pid: pid_t, force: Bool = false) {
+    Automations.shared.killedByUs.insert(pid)
+    kill(pid, force ? SIGKILL : SIGTERM)
+}
 
 // ================================================================ Docker
 struct Container: Identifiable {

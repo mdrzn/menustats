@@ -292,6 +292,13 @@ struct GeneralSettings: View {
             }
             Text(L("Soglia per almeno 10 secondi. 100% = un core pieno.")).font(.ui(10.5)).foregroundStyle(Theme.tertiary)
         }
+        Card(title: L("Notifiche")) {
+            ForEach(NotifyKind.allCases) { k in
+                row(k.title) { Toggle("", isOn: Binding(get: { s.c.notify[k.rawValue] ?? k.defaultOn }, set: { s.c.notify[k.rawValue] = $0 }))
+                    .toggleStyle(.switch).labelsHidden().controlSize(.small) }
+            }
+            Text(L("Alla prima notifica macOS chiede il permesso. Clic su una notifica: si apre la scheda giusta.")).font(.ui(10.5)).foregroundStyle(Theme.tertiary)
+        }
         Card(title: L("Sperimentale")) {
             row(L("Volume per app")) { Toggle("", isOn: Binding(get: { s.c.perAppVolume }, set: { s.c.perAppVolume = $0; Monitor.shared.applyMixer() }))
                 .toggleStyle(.switch).labelsHidden().controlSize(.small) }

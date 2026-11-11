@@ -427,6 +427,20 @@ struct ProcessInspector: View {
             PillButton(title: L("Esci")) { terminate(g, force: false); m.refreshDetails() }
             PillButton(title: L("Forza uscita"), color: Theme.danger) { terminate(g, force: true); m.refreshDetails() }
             Spacer()
+            if let path = g.bundlePath {
+                let current = Prefs.shared.c.autoRestart[path]
+                Menu {
+                    Button(L("Mai")) { Prefs.shared.c.autoRestart[path] = nil }
+                    ForEach([1.0, 2.0, 3.0, 4.0, 6.0, 8.0], id: \.self) { gb in
+                        Button(L("Oltre %@", String(format: "%.0f GB", gb))) { Prefs.shared.c.autoRestart[path] = gb }
+                    }
+                } label: {
+                    Label(current.map { L("Riavvio auto oltre %@", String(format: "%.0f GB", $0)) } ?? L("Riavvio automatico"), systemImage: "arrow.triangle.2.circlepath")
+                        .font(.ui(10.5))
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+                .help(L("Riavvia l'app da sola quando usa più memoria di così (al massimo una volta ogni 30 minuti)"))
+            }
             if m.restartFailed.contains(g.key) {
                 Text(L("non si è chiusa: controlla se chiede di salvare")).font(.ui(9.5)).foregroundStyle(Theme.warning).lineLimit(1)
             }

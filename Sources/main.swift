@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
         installHotKeyHandler()
         registerHotKey()
+        Notifier.shared.setup()
         Prefs.shared.objectWillChange.receive(on: RunLoop.main)
             .sink { [weak self] _ in DispatchQueue.main.async { self?.applyTheme(); self?.rebuildItems() } }
             .store(in: &bag)
@@ -99,6 +100,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         if let mod = MenuModule(rawValue: entry.key) { Nav.shared.tab = mod.tab }
         if popover.isShown && anchor === entry.item { popover.performClose(nil); return }
         show(from: entry.item)
+    }
+
+    // Apre il pannello se e' chiuso (es. clic su una notifica)
+    func togglePopoverOpen() {
+        if !popover.isShown, let first = items.first?.item { show(from: first) }
     }
 
     // Scorciatoia: apre/chiude il popover sul primo elemento
@@ -159,6 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     func applicationWillTerminate(_ n: Notification) {
         monitor.mixer.stopAll()        // restituisce l'audio alle app
         monitor.awake.stop()
+        monitor.awake.setAuto(nil)
     }
 
     // ------------------------------------------------------------ ⌥⌘M (Carbon: nessun permesso richiesto)
@@ -186,6 +193,24 @@ if let i = CommandLine.arguments.firstIndex(of: "--screenshots"), i + 1 < Comman
 if let i = CommandLine.arguments.firstIndex(of: "--gifs"), i + 1 < CommandLine.arguments.count {
     Screenshots.gifs(URL(fileURLWithPath: CommandLine.arguments[i + 1]))
     exit(0)
+}
+// MenuStats --debug: stampa i dati raccolti (per sviluppo)
+if CommandLine.arguments.contains("--debug") {
+    let m = Monitor.shared
+    m.detailed = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+        print("cpu \(formatPercent(m.cpu)) mem \(formatBytes(m.memory.used)) soc \(m.sensors.socTemperature ?? -1)")
+        for a in m.agents {
+            print("agent \(a.kind) \(a.project) busy=\(a.isBusy) terminal=\(a.terminal ?? "-")")
+            if let c = a.claude {
+                print("   model=\(c.model ?? "-") tokens=\(formatTokens(c.totalTokens)) out=\(formatTokens(c.outputTokens)) file=\((c.file as NSString).lastPathComponent)")
+                print("   last=\(c.lastText.map { String($0.prefix(80)) } ?? "-")")
+            }
+        }
+        print("ports", m.devPorts.map { ":\($0.port) \($0.label)" }, "alerts", m.alerts.map(\.title))
+        exit(0)
+    }
+    RunLoop.main.run()
 }
 let delegate = AppDelegate()
 app.delegate = delegate

@@ -95,6 +95,9 @@ struct Config: Codable, Equatable {
     var hideLabels = false
     var minimalMode = false                  // solo un'icona che cambia colore con gli avvisi
     var pingHost = "1.1.1.1"
+    var notify: [String: Bool] = [:]         // tipo di notifica -> attiva (default in NotifyKind.defaultOn)
+    var autoRestart: [String: Double] = [:]  // percorso dell'app -> soglia in GB
+    var awakeWhenAgents = false, awakeWhenServers = false, awakeOnAC = false
     var perAppVolume = false                 // sperimentale: chiede il permesso di registrare l'audio
 
     static func load() -> Config {
@@ -273,6 +276,15 @@ final class Monitor: ObservableObject {
         timer = t
     }
 
+    // Notifiche e regole automatiche hanno bisogno di processi e porte anche a pannello chiuso
+    var needsBackgroundDetails: Bool {
+        let c = settings.c
+        let notifyAgents = c.notify[NotifyKind.agentDone.rawValue] ?? NotifyKind.agentDone.defaultOn
+        let notifyServers = c.notify[NotifyKind.serverDown.rawValue] ?? NotifyKind.serverDown.defaultOn
+        return notifyAgents || notifyServers || !c.autoRestart.isEmpty || c.awakeWhenAgents || c.awakeWhenServers || c.awakeOnAC
+            || NotifyKind.allCases.contains { c.notify[$0.rawValue] ?? $0.defaultOn }
+    }
+
     var needsSensors: Bool {
         detailed || settings.c.modules.contains(.temperature) || settings.c.modules.contains(.power)
     }
@@ -300,6 +312,7 @@ final class Monitor: ObservableObject {
         detailTick += 1
         if detailed && detailTick % 3 == 0 { refreshDetails() }
         else if !detailed && detailTick % 15 == 0 && (settings.c.modules.contains(.ports) || settings.c.modules.contains(.agents) || settings.c.minimalMode) { refreshDetails() }
+        else if !detailed && detailTick % 5 == 0 && needsBackgroundDetails { refreshDetails() }
         if detailed && trafficVisible && detailTick % 3 == 0 { refreshTraffic() }
         if detailed { refreshAudioLevels() }
     }
@@ -314,7 +327,8 @@ final class Monitor: ObservableObject {
             let procs = self.procReader.sample()
             let groups = self.procReader.group(procs).sorted { $0.cpu > $1.cpu }
             let rawPorts = readListeningPorts()
-            let agents = detectAgents(procs, ports: rawPorts)
+            var agents = detectAgents(procs, ports: rawPorts)
+            ClaudeSessions.shared.attach(&agents)
             let containers = readContainers()
             let ports = annotate(rawPorts, processes: procs, agents: agents, containers: containers ?? [])
             let blockers = readSleepBlockers()
@@ -322,6 +336,7 @@ final class Monitor: ObservableObject {
                 self.processes = procs; self.apps = groups; self.ports = ports; self.agents = agents
                 self.containers = containers; self.blockers = blockers
                 self.updateAlerts(threshold: threshold)
+                Automations.shared.evaluate(self)
                 self.busy = false
             }
         }
