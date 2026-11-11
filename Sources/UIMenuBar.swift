@@ -33,6 +33,33 @@ extension Monitor {
     }
 }
 
+extension MenuModule {
+    // Testo piu' largo che il valore puo' assumere: riserva sempre quello spazio,
+    // cosi' l'elemento nella barra (e il popover agganciato) non si sposta.
+    var widthTemplate: String {
+        switch self {
+        case .cpu, .memory, .gpu, .disk, .battery: "100%"
+        case .network: "↓999K"
+        case .temperature: "100°"
+        case .power: "100W"
+        case .ports: "99"
+        case .agents: "9/9"
+        }
+    }
+}
+
+// Testo allineato a destra dentro uno spazio largo quanto `template`
+struct FixedSlot: View {
+    let text: String
+    let template: String
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            Text(template).hidden()
+            Text(text)
+        }
+    }
+}
+
 struct MenuBarView: View {
     @ObservedObject var m = Monitor.shared
     @ObservedObject var s = Prefs.shared
@@ -87,8 +114,8 @@ struct MenuBarView: View {
         switch col {
         case .network:
             VStack(alignment: .trailing, spacing: -1) {
-                HStack(spacing: 3) { Text(formatRate(m.up, compact: true)); Text("↑").foregroundStyle(labelColor) }
-                HStack(spacing: 3) { Text(formatRate(m.down, compact: true)); Text("↓").foregroundStyle(labelColor) }
+                HStack(spacing: 3) { FixedSlot(text: formatRate(m.up, compact: true), template: "999K"); Text("↑").foregroundStyle(labelColor) }
+                HStack(spacing: 3) { FixedSlot(text: formatRate(m.down, compact: true), template: "999K"); Text("↓").foregroundStyle(labelColor) }
             }
             .font(.system(size: 9, weight: .semibold, design: c.font.design)).foregroundStyle(forceDark ? .white : .primary)
         case .pair(let a, let b):
@@ -98,7 +125,8 @@ struct MenuBarView: View {
                     Text(va.label); if let vb { Text(vb.label) }
                 }.foregroundStyle(labelColor)
                 VStack(alignment: .trailing, spacing: -1) {
-                    Text(va.value).foregroundStyle(color(va)); if let vb { Text(vb.value).foregroundStyle(color(vb)) }
+                    FixedSlot(text: va.value, template: a.widthTemplate).foregroundStyle(color(va))
+                    if let vb, let b { FixedSlot(text: vb.value, template: b.widthTemplate).foregroundStyle(color(vb)) }
                 }
             }
             .font(.system(size: vb == nil ? 11 : 9, weight: .semibold, design: c.font.design))
@@ -113,30 +141,30 @@ struct MenuBarView: View {
         case .compact, .stacked:
             HStack(spacing: 3) {
                 Text(v.label).font(.system(size: 9, weight: .semibold, design: c.font.design)).foregroundStyle(labelColor)
-                Text(valueText).foregroundStyle(color(v))
+                FixedSlot(text: valueText, template: mod.widthTemplate).foregroundStyle(color(v))
             }
         case .graph:
             HStack(spacing: 4) {
                 Sparkline(values: Array(v.history.suffix(24)), maxValue: v.maxValue, color: c.valueColor == .menuBar ? (forceDark ? .white : .primary) : color(v), lineWidth: 1.1)
                     .frame(width: 26, height: 13)
                     .overlay(RoundedRectangle(cornerRadius: 2).strokeBorder(labelColor.opacity(0.4), lineWidth: 0.5))
-                Text(valueText).foregroundStyle(color(v))
+                FixedSlot(text: valueText, template: mod.widthTemplate).foregroundStyle(color(v))
             }
         case .pill:
-            Text(valueText).foregroundStyle(c.valueColor == .menuBar ? (forceDark ? .white : .primary) : color(v))
+            FixedSlot(text: valueText, template: mod.widthTemplate).foregroundStyle(c.valueColor == .menuBar ? (forceDark ? .white : .primary) : color(v))
                 .padding(.horizontal, 6).padding(.vertical, 1.5)
                 .background(Capsule().fill((c.valueColor == .menuBar ? accent : color(v)).opacity(0.28)))
         case .outline:
             HStack(spacing: 3) {
                 Text(v.label).font(.system(size: 8.5, weight: .bold, design: c.font.design)).foregroundStyle(labelColor)
-                Text(valueText).foregroundStyle(color(v))
+                FixedSlot(text: valueText, template: mod.widthTemplate).foregroundStyle(color(v))
             }
             .padding(.horizontal, 5).padding(.vertical, 1.5)
             .overlay(Capsule().strokeBorder(labelColor.opacity(0.7), lineWidth: 1))
         case .icons:
             HStack(spacing: 3) {
                 Image(systemName: mod.symbol).font(.system(size: 10.5, weight: .medium)).foregroundStyle(labelColor)
-                Text(valueText).foregroundStyle(color(v))
+                FixedSlot(text: valueText, template: mod.widthTemplate).foregroundStyle(color(v))
             }
         }
     }
