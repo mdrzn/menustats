@@ -166,6 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         monitor.mixer.stopAll()        // restituisce l'audio alle app
         monitor.awake.stop()
         monitor.awake.setAuto(nil)
+        HistoryStore.shared.save()
     }
 
     // ------------------------------------------------------------ ⌥⌘M (Carbon: nessun permesso richiesto)
@@ -207,6 +208,8 @@ if CommandLine.arguments.contains("--debug") {
                 print("   last=\(c.lastText.map { String($0.prefix(80)) } ?? "-")")
             }
         }
+        let w = readWiFi()
+        print("wifi", w.map { "\($0.ssid ?? "(ssid nascosto)") \($0.rssi)dBm \($0.txRate)Mbit \($0.band ?? "")" } ?? "nessuno", "vpn", activeVPNs().map { "\($0.iface) \($0.ip)" })
         print("ports", m.devPorts.map { ":\($0.port) \($0.label)" }, "alerts", m.alerts.map(\.title))
         exit(0)
     }

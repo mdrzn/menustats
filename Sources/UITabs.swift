@@ -7,6 +7,7 @@ import CoreAudio
 struct NetworkTab: View {
     @ObservedObject var m = Monitor.shared
     @ObservedObject var s = Prefs.shared
+    @Local private var hours = 0          // 0 = dal vivo, 1 = ultima ora, 24 = ultime 24 ore
     var accent: Color { s.accent }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -17,10 +18,25 @@ struct NetworkTab: View {
                     rate(L("Upload"), m.up, "arrow.up", Color(hex: "A78BFA"))
                     Spacer()
                 }
+                let downs = hours == 0 ? m.downHistory.values : HistoryStore.shared.series(\.down, hours: hours)
+                let ups = hours == 0 ? m.upHistory.values : HistoryStore.shared.series(\.up, hours: hours)
+                let top = max(downs.max() ?? 0, ups.max() ?? 0, 1024)
+                Segmented(options: [(0, L("Dal vivo")), (1, L("1 ora")), (24, L("24 ore"))], selection: $hours, accent: accent)
+                if hours > 0 && downs.count < 2 {
+                    Text(L("Lo storico si riempie col tempo: un punto al minuto.")).font(.ui(10.5)).foregroundStyle(Theme.tertiary).frame(height: 54)
+                } else {
                 ZStack {
-                    Sparkline(values: m.downHistory.values, maxValue: max(m.downHistory.peak, m.upHistory.peak, 1024), color: Theme.netColor)
-                    Sparkline(values: m.upHistory.values, maxValue: max(m.downHistory.peak, m.upHistory.peak, 1024), color: Color(hex: "A78BFA"), fill: false, lineWidth: 1.1)
+                    Sparkline(values: downs, maxValue: top, color: Theme.netColor)
+                    Sparkline(values: ups, maxValue: top, color: Color(hex: "A78BFA"), fill: false, lineWidth: 1.1)
                 }.frame(height: 54)
+                }
+                HStack(spacing: 14) {
+                    let t = HistoryStore.shared.today, mo = HistoryStore.shared.thisMonth
+                    KVSmall(k: L("Oggi"), v: "↓ \(formatBytes(UInt64(t.rx))) · ↑ \(formatBytes(UInt64(t.tx)))")
+                    KVSmall(k: L("Questo mese"), v: "↓ \(formatBytes(UInt64(mo.rx))) · ↑ \(formatBytes(UInt64(mo.tx)))")
+                    Spacer()
+                }
+
                 HStack {
                     Text(L("picco ↓ %@ · ↑ %@", formatRate(m.downHistory.peak), formatRate(m.upHistory.peak))).font(.ui(10)).foregroundStyle(Theme.tertiary)
                     Spacer()
@@ -47,6 +63,40 @@ struct NetworkTab: View {
                     }
                 }
             }
+            HStack(alignment: .top, spacing: 8) {
+                Card(title: "Wi-Fi") {
+                    if let w = m.wifi {
+                        Text(w.ssid ?? L("Rete Wi-Fi")).font(.ui(12.5, .semibold)).lineLimit(1)
+                        Meter(value: w.quality, color: w.quality < 0.35 ? Theme.warning : Theme.netColor)
+                        Text("\(w.rssi) dBm · \(Int(w.txRate)) Mbit/s\(w.band.map { " · " + $0 } ?? "")").font(.number(10, .regular)).foregroundStyle(Theme.secondary)
+                    } else {
+                        Text(L("Non connesso al Wi-Fi.")).font(.ui(11)).foregroundStyle(Theme.tertiary)
+                    }
+                }
+                Card(title: "VPN") {
+                    if m.vpns.isEmpty {
+                        Text(L("Nessuna VPN attiva.")).font(.ui(11)).foregroundStyle(Theme.tertiary)
+                    } else {
+                        ForEach(m.vpns, id: \.iface) { v in
+                            HStack(spacing: 6) { Dot(color: accent, size: 6); Text(v.ip).font(.number(11.5, .medium)); Text(v.iface).font(.mono(9.5)).foregroundStyle(Theme.tertiary) }
+                        }
+                    }
+                }
+            }
+            Card(title: L("Test di velocità"), trailing: "networkQuality") {
+                HStack(spacing: 18) {
+                    if let r = m.speed {
+                        KVSmall(k: L("Download"), v: formatBits(r.down), big: true)
+                        KVSmall(k: L("Upload"), v: formatBits(r.up), big: true)
+                        if let rpm = r.responsiveness { KVSmall(k: L("Reattività"), v: "\(Int(rpm)) RPM", big: true) }
+                    } else {
+                        Text(L("Misura download, upload e reattività con lo strumento di Apple incluso in macOS (circa 20 secondi).")).font(.ui(11)).foregroundStyle(Theme.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer()
+                    if m.speedTesting { ProgressView().controlSize(.small) }
+                    PillButton(title: m.speedTesting ? L("In corso…") : L("Avvia test"), color: accent, prominent: !m.speedTesting) { m.startSpeedTest() }
+                }
+            }
             Card(title: L("Interfacce")) {
                 ForEach(primaryAddresses(), id: \.iface) { a in KV(k: a.iface == "en0" ? L("Ethernet / Wi-Fi (en0)") : a.iface, v: a.ip) }
                 if primaryAddresses().isEmpty { Text(L("Nessuna rete attiva.")).font(.ui(11)).foregroundStyle(Theme.tertiary) }
@@ -62,6 +112,19 @@ struct NetworkTab: View {
 }
 
 // ================================================================ Volume
+// Etichetta piccola + valore
+struct KVSmall: View {
+    let k: String
+    let v: String
+    var big = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(k).font(.ui(9.5)).foregroundStyle(Theme.tertiary)
+            Text(v).font(.number(big ? 14 : 11, .medium)).lineLimit(1)
+        }
+    }
+}
+
 struct VolumeTab: View {
     @ObservedObject var m = Monitor.shared
     @ObservedObject var s = Prefs.shared
@@ -183,6 +246,10 @@ struct PortRow: View {
             if hover && !compact {
                 if !p.isLocalOnly || true {
                     IconButton(symbol: "safari", help: L("Apri nel browser")) { NSWorkspace.shared.open(URL(string: "http://localhost:\(p.port)")!) }
+                }
+                IconButton(symbol: "doc.on.doc", help: L("Copia URL")) {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString("http://localhost:\(p.port)", forType: .string)
                 }
                 IconButton(symbol: "xmark.circle", help: L("Termina il processo")) { killProcess(p.pid); Monitor.shared.refreshDetails() }
             } else {

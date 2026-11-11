@@ -111,6 +111,10 @@ enum Screenshots {
                         Container(id: "a2", name: "redis", image: "redis:7-alpine", status: "Exited", running: false, ports: "", hostPorts: [])]
         m.traffic = [AppTraffic(name: "Safari", down: 1_420_000, up: 41_000), AppTraffic(name: L("Musica"), down: 320_000, up: 6_000),
                      AppTraffic(name: "node", down: 64_000, up: 38_000), AppTraffic(name: "mDNSResponder", down: 2_000, up: 1_000)]
+        m.wifi = WiFiInfo(ssid: "Studio", rssi: -52, noise: -92, txRate: 866, band: "5 GHz")
+        m.vpns = [("utun3", "100.64.0.12")]
+        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
+        HistoryStore.shared.daily = [df.string(from: Date()): [2.4e9, 3.1e8], df.string(from: Date().addingTimeInterval(-86_400)): [5.2e9, 9e8]]
         m.blockers = [SleepBlocker(pid: 620, process: "Music", name: L("Riproduzione audio"), type: "sistema")]
         m.alerts = [Alert(id: "orph", severity: 1, title: L("Un server di sviluppo orfano"), detail: ":5173 vite · docs", actionTitle: L("Chiudi"), action: .killPorts([])),
                     Alert(id: "hog", severity: 1, title: L("%@ usa molta CPU", "Safari"), detail: L("%@ da un po'", "140%"), actionTitle: L("Chiudi"), action: .openTab("apps"))]

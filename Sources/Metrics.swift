@@ -137,6 +137,7 @@ final class NetworkReader {
 
 // Indirizzo IP e nome della rete attiva (per la scheda Rete)
 func primaryAddresses() -> [(iface: String, ip: String)] {
+    if Monitor.demoMode { return [("en0", "192.168.1.24")] }      // screenshot: niente IP reali
     var out: [(String, String)] = []
     var ifap: UnsafeMutablePointer<ifaddrs>?
     guard getifaddrs(&ifap) == 0, let first = ifap else { return [] }

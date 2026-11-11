@@ -223,6 +223,13 @@ final class Monitor: ObservableObject {
     @Published var traffic: [AppTraffic] = []
     @Published var blockers: [SleepBlocker] = []
     @Published var alerts: [Alert] = []
+    @Published var peripherals: [Peripheral] = []
+    @Published var wifi: WiFiInfo?
+    @Published var vpns: [(iface: String, ip: String)] = []
+    @Published var speed: SpeedResult?
+    @Published var speedTesting = false
+    private var lastTickAt = Date()
+    private var lastPeripherals = Date.distantPast
     @Published var publicIP: String?
     @Published var pingMs: Double?
     @Published var pingHistory = History(60)
@@ -295,6 +302,10 @@ final class Monitor: ObservableObject {
         memory = .read()
         down = netReader.down; up = netReader.up
         cpuHistory.add(cpu); memHistory.add(memory.fraction); downHistory.add(down); upHistory.add(up)
+        let dt = min(Date().timeIntervalSince(lastTickAt), 10); lastTickAt = Date()
+        if !Monitor.demoMode {
+            HistoryStore.shared.add(cpu: cpu, mem: memory.fraction, down: down, up: up, temp: sensors.socTemperature, dt: dt)
+        }
         if detailed || settings.c.modules.contains(.gpu) { gpu = gpuUtilization(); gpuHistory.add(gpu ?? 0) }
         if needsSensors {
             sensors = .read(fans: detailed || settings.c.modules.contains(.power))
@@ -314,6 +325,8 @@ final class Monitor: ObservableObject {
         else if !detailed && detailTick % 15 == 0 && (settings.c.modules.contains(.ports) || settings.c.modules.contains(.agents) || settings.c.minimalMode) { refreshDetails() }
         else if !detailed && detailTick % 5 == 0 && needsBackgroundDetails { refreshDetails() }
         if detailed && trafficVisible && detailTick % 3 == 0 { refreshTraffic() }
+        if detailed && detailTick % 3 == 0 { wifi = readWiFi(); vpns = activeVPNs() }
+        if detailed && Date().timeIntervalSince(lastPeripherals) > 60 { refreshPeripherals() }
         if detailed { refreshAudioLevels() }
     }
 
@@ -360,6 +373,23 @@ final class Monitor: ObservableObject {
             let out = run("/sbin/ping", ["-c", "1", "-t", "2", host], timeout: 3) ?? ""
             let ms = out.range(of: "time=").flatMap { r in Double(out[r.upperBound...].prefix { $0.isNumber || $0 == "." }) }
             DispatchQueue.main.async { self?.pingMs = ms; if let ms { self?.pingHistory.add(ms) } }
+        }
+    }
+
+    func refreshPeripherals() {
+        lastPeripherals = Date()
+        work.async { [weak self] in
+            let p = readPeripherals()
+            DispatchQueue.main.async { self?.peripherals = p }
+        }
+    }
+
+    func startSpeedTest() {
+        guard !speedTesting else { return }
+        speedTesting = true
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let r = runSpeedTest()
+            DispatchQueue.main.async { self?.speed = r ?? self?.speed; self?.speedTesting = false }
         }
     }
 

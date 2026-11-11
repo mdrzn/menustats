@@ -461,6 +461,7 @@ struct SystemTab: View {
     @ObservedObject var m = Monitor.shared
     @ObservedObject var s = Prefs.shared
     @Local private var allSensors = false
+    @Local private var hours = 0
     var accent: Color { s.accent }
 
     var body: some View {
@@ -481,6 +482,19 @@ struct SystemTab: View {
                     Sparkline(values: m.gpuHistory.values, maxValue: 1, color: Theme.gpuColor).frame(height: 22)
                 }
             }
+            if !m.peripherals.isEmpty {
+                Card(title: L("Periferiche")) {
+                    ForEach(m.peripherals) { p in
+                        HStack(spacing: 8) {
+                            Text(p.name).font(.ui(11.5, .medium)).lineLimit(1)
+                            if let part = p.part { Text(part).font(.ui(10)).foregroundStyle(Theme.tertiary) }
+                            Spacer()
+                            Meter(value: p.percent, color: p.percent < 0.2 ? Theme.danger : accent).frame(width: 70)
+                            Text(formatPercent(p.percent)).font(.number(11)).frame(width: 38, alignment: .trailing)
+                        }
+                    }
+                }
+            }
             if let b = m.battery {
                 Card(title: L("Batteria"), trailing: b.charging ? L("in carica") : (b.onAC ? "alimentatore" : L("a batteria"))) {
                     HStack { Text(formatPercent(b.percent)).font(.number(15)); Spacer()
@@ -499,7 +513,18 @@ struct SystemTab: View {
                 Spacer()
                 Text(thermalText).font(.ui(10.5, .medium)).foregroundStyle(m.thermal == .nominal ? Theme.tertiary : Theme.warning)
             }
-            Sparkline(values: m.cpuHistory.values, maxValue: 1, color: Theme.cpuColor).frame(height: 30)
+            Segmented(options: [(0, L("Dal vivo")), (1, L("1 ora")), (24, L("24 ore"))], selection: $hours, accent: accent)
+            let series = hours == 0 ? m.cpuHistory.values : HistoryStore.shared.series(\.cpu, hours: hours)
+            let memSeries = hours == 0 ? m.memHistory.values : HistoryStore.shared.series(\.mem, hours: hours)
+            if series.count < 2 {
+                Text(L("Lo storico si riempie col tempo: un punto al minuto.")).font(.ui(10.5)).foregroundStyle(Theme.tertiary).frame(height: 30)
+            } else {
+                ZStack {
+                    Sparkline(values: series, maxValue: 1, color: Theme.cpuColor)
+                    if hours > 0 { Sparkline(values: memSeries, maxValue: 1, color: Theme.memColor.opacity(0.8), fill: false, lineWidth: 1) }
+                }.frame(height: 30)
+                if hours > 0 { Text(L("CPU e, sottile, memoria")).font(.ui(9.5)).foregroundStyle(Theme.tertiary) }
+            }
             CoreBars(cores: m.perCore, performance: 0, accent: Theme.cpuColor).frame(height: 34)
         }
     }

@@ -12,7 +12,7 @@ compile() {   # compile <arch>
   clang -c -O2 -target $1-apple-macos14.2 CSupport/msupport.c -o build/msupport-$1.o
   xcrun swiftc -O -swift-version 5 -module-name MenuStats -target $1-apple-macos14.2 \
     -import-objc-header CSupport/msupport.h Sources/*.swift build/msupport-$1.o \
-    -framework IOKit -framework CoreAudio -framework AudioToolbox -o build/MenuStats-$1
+    -framework IOKit -framework CoreAudio -framework AudioToolbox -framework CoreWLAN -o build/MenuStats-$1
 }
 if [ "$1" = "--universal" ]; then
   compile arm64; compile x86_64
