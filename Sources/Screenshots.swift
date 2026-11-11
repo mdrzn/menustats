@@ -135,6 +135,26 @@ enum Screenshots {
     }
 }
 
+// MenuStats --icon <cartella.iconset>: icona dell'app a tutte le dimensioni (poi iconutil -> .icns)
+extension Screenshots {
+    static func icon(_ out: URL) {
+        try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.prohibited)
+        for base in [16, 32, 128, 256, 512] {
+            for scale in [1, 2] {
+                let px = CGFloat(base * scale)
+                // margine e ombra come le icone di macOS
+                let view = ZStack {
+                    AppLogo(size: px * 0.8).shadow(color: .black.opacity(0.35), radius: px * 0.02, y: px * 0.012)
+                }.frame(width: px, height: px)
+                let name = scale == 1 ? "icon_\(base)x\(base).png" : "icon_\(base)x\(base)@2x.png"
+                save(view, size: CGSize(width: px, height: px), to: out.appendingPathComponent(name), rounded: 0, opaque: false)
+            }
+        }
+    }
+}
+
 // Tutti i look della barra uno sotto l'altro
 struct LooksSheet: View {
     var body: some View {

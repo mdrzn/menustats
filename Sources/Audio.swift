@@ -12,7 +12,7 @@ func caAddress(_ sel: AudioObjectPropertySelector, _ scope: AudioObjectPropertyS
     AudioObjectPropertyAddress(mSelector: sel, mScope: scope, mElement: element)
 }
 
-func caGet<T>(_ obj: AudioObjectID, _ sel: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal,
+func caGet<T: BitwiseCopyable>(_ obj: AudioObjectID, _ sel: AudioObjectPropertySelector, scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal,
               element: AudioObjectPropertyElement = kAudioObjectPropertyElementMain, default d: T) -> T {
     var a = caAddress(sel, scope, element)
     var v = d

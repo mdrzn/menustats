@@ -98,6 +98,8 @@ struct Config: Codable, Equatable {
     var notify: [String: Bool] = [:]         // tipo di notifica -> attiva (default in NotifyKind.defaultOn)
     var autoRestart: [String: Double] = [:]  // percorso dell'app -> soglia in GB
     var awakeWhenAgents = false, awakeWhenServers = false, awakeOnAC = false
+    var tabHotkeys = true                    // ⌥⌘1…8 aprono le schede
+    var checkUpdates = true                  // controlla le nuove versioni su GitHub (una volta al giorno)
     var perAppVolume = false                 // sperimentale: chiede il permesso di registrare l'audio
 
     static func load() -> Config {
@@ -323,7 +325,7 @@ final class Monitor: ObservableObject {
         detailTick += 1
         if detailed && detailTick % 3 == 0 { refreshDetails() }
         else if !detailed && detailTick % 15 == 0 && (settings.c.modules.contains(.ports) || settings.c.modules.contains(.agents) || settings.c.minimalMode) { refreshDetails() }
-        else if !detailed && detailTick % 5 == 0 && needsBackgroundDetails { refreshDetails() }
+        else if !detailed && detailTick % 10 == 0 && needsBackgroundDetails { refreshDetails() }
         if detailed && trafficVisible && detailTick % 3 == 0 { refreshTraffic() }
         if detailed && detailTick % 3 == 0 { wifi = readWiFi(); vpns = activeVPNs() }
         if detailed && Date().timeIntervalSince(lastPeripherals) > 60 { refreshPeripherals() }

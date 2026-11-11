@@ -218,4 +218,11 @@ private let english: [String: String] = [
     "sinistra": "left",
     "destra": "right",
     "custodia": "case",
+    "È disponibile MenuStats %@": "MenuStats %@ is available",
+    "Scarica": "Download",
+    "Apri le schede con ⌥⌘1…8": "Open tabs with ⌥⌘1…8",
+    "Controlla gli aggiornamenti": "Check for updates",
+    "Salva le impostazioni in un file o caricale su un altro Mac.": "Save your settings to a file or load them on another Mac.",
+    "Esporta…": "Export…",
+    "Importa…": "Import…",
 ]

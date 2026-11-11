@@ -1,6 +1,7 @@
 // Finestra delle impostazioni: barra dei menu (look, elementi, colori), generale, informazioni.
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @ObservedObject var s = Prefs.shared
@@ -280,6 +281,10 @@ struct GeneralSettings: View {
         Card(title: L("Preferenze")) {
             row(L("Gradi Fahrenheit")) { Toggle("", isOn: $s.c.fahrenheit).toggleStyle(.switch).labelsHidden().controlSize(.small) }
             row(L("Avvia al login")) { Toggle("", isOn: $s.launchAtLogin).toggleStyle(.switch).labelsHidden().controlSize(.small) }
+            row(L("Apri le schede con ⌥⌘1…8")) { Toggle("", isOn: Binding(get: { s.c.tabHotkeys }, set: { s.c.tabHotkeys = $0; AppDelegate.shared?.registerHotKey() }))
+                .toggleStyle(.switch).labelsHidden().controlSize(.small) }
+            row(L("Controlla gli aggiornamenti")) { Toggle("", isOn: Binding(get: { s.c.checkUpdates }, set: { s.c.checkUpdates = $0; if $0 { Updater.shared.check() } }))
+                .toggleStyle(.switch).labelsHidden().controlSize(.small) }
             row(L("Apri il pannello con ⌥⌘M")) { Toggle("", isOn: Binding(get: { s.c.hotkeyEnabled }, set: { s.c.hotkeyEnabled = $0; AppDelegate.shared?.registerHotKey() }))
                 .toggleStyle(.switch).labelsHidden().controlSize(.small) }
         }
@@ -291,6 +296,14 @@ struct GeneralSettings: View {
                 Text("\(Int(s.c.cpuAlert))%").font(.number(11)).frame(width: 44, alignment: .trailing)
             }
             Text(L("Soglia per almeno 10 secondi. 100% = un core pieno.")).font(.ui(10.5)).foregroundStyle(Theme.tertiary)
+        }
+        Card(title: L("Impostazioni")) {
+            HStack {
+                Text(L("Salva le impostazioni in un file o caricale su un altro Mac.")).font(.ui(11)).foregroundStyle(Theme.secondary)
+                Spacer()
+                PillButton(title: L("Esporta…")) { exportSettings() }
+                PillButton(title: L("Importa…")) { importSettings() }
+            }
         }
         Card(title: L("Notifiche")) {
             ForEach(NotifyKind.allCases) { k in
@@ -306,6 +319,29 @@ struct GeneralSettings: View {
                 .font(.ui(10.5)).foregroundStyle(Theme.tertiary).fixedSize(horizontal: false, vertical: true)
         }
     }
+    func exportSettings() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "MenuStats-settings.json"
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try? enc.encode(s.c).write(to: url)
+    }
+
+    func importSettings() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url) else { return }
+        // unisce ai valori predefiniti, come al caricamento: un file vecchio non perde le opzioni nuove
+        let base = (try? JSONSerialization.jsonObject(with: JSONEncoder().encode(Config()))) as? [String: Any] ?? [:]
+        let saved = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        if let merged = try? JSONSerialization.data(withJSONObject: base.merging(saved) { _, n in n }),
+           let c = try? JSONDecoder().decode(Config.self, from: merged) {
+            s.c = c
+            AppDelegate.shared?.registerHotKey()
+        }
+    }
+
     func row<C: View>(_ t: String, @ViewBuilder _ c: () -> C) -> some View {
         HStack { Text(t).font(.ui(12)); Spacer(); c() }
     }

@@ -110,8 +110,25 @@ struct SidebarItem: View {
 
 struct Footer: View {
     @ObservedObject var m = Monitor.shared
+    @ObservedObject var updater = Updater.shared
     let accent: Color
     var body: some View {
+        VStack(spacing: 0) {
+            if let v = updater.latest, let url = updater.url {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.down.circle.fill").foregroundStyle(accent)
+                    Text(L("È disponibile MenuStats %@", v)).font(.ui(11, .medium))
+                    Spacer()
+                    PillButton(title: L("Scarica"), color: accent, prominent: true) { NSWorkspace.shared.open(url) }
+                }
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(accent.opacity(0.1))
+            }
+            bar
+        }
+    }
+
+    var bar: some View {
         HStack(spacing: 8) {
             Text(L("MenuStats")).font(.ui(10.5, .semibold)).foregroundStyle(Theme.secondary)
             Text(Monitor.demoMode ? L("0.3% · 21 MB") : "\(String(format: "%.1f", m.selfUsage.cpu * 100))% · \(formatBytes(m.selfUsage.memory))")

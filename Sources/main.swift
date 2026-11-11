@@ -47,6 +47,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         installHotKeyHandler()
         registerHotKey()
         Notifier.shared.setup()
+        Updater.shared.start()
+        // MENUSTATS_OPEN=1: apre il pannello all'avvio (per misurare i consumi a pannello aperto)
+        if ProcessInfo.processInfo.environment["MENUSTATS_OPEN"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.togglePopoverOpen() }
+        }
         Prefs.shared.objectWillChange.receive(on: RunLoop.main)
             .sink { [weak self] _ in DispatchQueue.main.async { self?.applyTheme(); self?.rebuildItems() } }
             .store(in: &bag)
@@ -172,23 +177,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     // ------------------------------------------------------------ ⌥⌘M (Carbon: nessun permesso richiesto)
     func installHotKeyHandler() {
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
-            DispatchQueue.main.async { AppDelegate.shared?.togglePopover() }
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
+            var hk = EventHotKeyID()
+            GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil,
+                              MemoryLayout<EventHotKeyID>.size, nil, &hk)
+            let id = Int(hk.id)
+            DispatchQueue.main.async {
+                if id == 1 { AppDelegate.shared?.togglePopover() }
+                else if id >= 11, id - 11 < tabs.count { AppDelegate.shared?.openTab(tabs[id - 11].id) }
+            }
             return noErr
         }, 1, &spec, nil, nil)
     }
 
     func registerHotKey() {
         if let r = hotKeyRef { UnregisterEventHotKey(r); hotKeyRef = nil }
-        guard Prefs.shared.c.hotkeyEnabled else { return }
-        RegisterEventHotKey(UInt32(kVK_ANSI_M), UInt32(cmdKey | optionKey), EventHotKeyID(signature: OSType(0x4D535431), id: 1),
-                            GetApplicationEventTarget(), 0, &hotKeyRef)
+        tabHotKeys.forEach { UnregisterEventHotKey($0) }
+        tabHotKeys.removeAll()
+        if Prefs.shared.c.hotkeyEnabled {
+            RegisterEventHotKey(UInt32(kVK_ANSI_M), UInt32(cmdKey | optionKey), EventHotKeyID(signature: OSType(0x4D535431), id: 1),
+                                GetApplicationEventTarget(), 0, &hotKeyRef)
+        }
+        guard Prefs.shared.c.tabHotkeys else { return }
+        let digits = [kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8]
+        for (i, key) in digits.enumerated() where i < tabs.count {
+            var ref: EventHotKeyRef?
+            RegisterEventHotKey(UInt32(key), UInt32(cmdKey | optionKey), EventHotKeyID(signature: OSType(0x4D535431), id: UInt32(11 + i)),
+                                GetApplicationEventTarget(), 0, &ref)
+            if let ref { tabHotKeys.append(ref) }
+        }
+    }
+
+    // ⌥⌘1…8: apre il pannello sulla scheda (o la cambia se e' gia' aperto)
+    func openTab(_ tab: String) {
+        Nav.shared.tab = tab
+        togglePopoverOpen()
     }
 }
 
 let app = NSApplication.shared
 if let i = CommandLine.arguments.firstIndex(of: "--screenshots"), i + 1 < CommandLine.arguments.count {
     Screenshots.run(URL(fileURLWithPath: CommandLine.arguments[i + 1]))
+    exit(0)
+}
+if let i = CommandLine.arguments.firstIndex(of: "--icon"), i + 1 < CommandLine.arguments.count {
+    Screenshots.icon(URL(fileURLWithPath: CommandLine.arguments[i + 1]))
     exit(0)
 }
 if let i = CommandLine.arguments.firstIndex(of: "--gifs"), i + 1 < CommandLine.arguments.count {
