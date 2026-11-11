@@ -159,7 +159,7 @@ func detectAgents(_ list: [ProcessSample], ports: [ListeningPort]) -> [AgentSess
     var sessions: [AgentSession] = []
     var claimed = Set<pid_t>()
     for p in list.sorted(by: { $0.pid < $1.pid }) where !p.path.contains(".app/") && !claimed.contains(p.pid) {
-        let args = processArguments(p.pid)
+        let args = processArguments(p.pid, startedAt: p.startedAt)
         // nome di lancio (argv[0]): il binario su disco puo' chiamarsi come la versione
         let base = ((args.first ?? p.path) as NSString).lastPathComponent
         let fileBase = (p.path as NSString).lastPathComponent

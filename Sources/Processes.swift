@@ -35,6 +35,7 @@ final class ProcessReader {
         return Double(tb.numer) / Double(tb.denom) / 1e9      // tick mach -> secondi
     }()
     private var nameCache: [String: String] = [:]
+    private var pathCache: [pid_t: (start: Date, path: String)] = [:]
 
     func sample() -> [ProcessSample] {
         let n = proc_listallpids(nil, 0)
@@ -58,7 +59,9 @@ final class ProcessReader {
             var cpu = 0.0
             if let p = previous[pid], now > p.at { cpu = max(0, (cpuTime - p.time) / (now - p.at) * 100) }
             seen[pid] = (cpuTime, now)
-            let path = Self.path(pid)
+            let start = Date(timeIntervalSince1970: Double(bsd.pbi_start_tvsec))
+            let path: String
+            if let c = pathCache[pid], c.start == start { path = c.path } else { path = Self.path(pid); pathCache[pid] = (start, path) }
             var name = withUnsafeBytes(of: bsd.pbi_name) { String(cString: $0.bindMemory(to: CChar.self).baseAddress!) }
             // alcuni CLI installano binari chiamati come la versione (es. claude -> versions/2.1.314)
             if name.isEmpty || name.allSatisfy({ $0.isNumber || $0 == "." }) {
@@ -69,15 +72,19 @@ final class ProcessReader {
             out.append(ProcessSample(pid: pid, ppid: bsdSize > 0 ? pid_t(bsd.pbi_ppid) : 0, name: name, path: path,
                                      cpu: cpu, memory: ru.ri_phys_footprint,
                                      threads: taskSize > 0 ? Int(task.pti_threadnum) : 0, cpuTime: cpuTime,
-                                     startedAt: Date(timeIntervalSince1970: Double(bsd.pbi_start_tvsec))))
+                                     startedAt: start))
         }
         previous = seen.mapValues { (time: $0.0, at: $0.1) }
+        pathCache = pathCache.filter { seen[$0.key] != nil }
         return out
     }
 
     static func path(_ pid: pid_t) -> String {
         var buf = [CChar](repeating: 0, count: 4096)
-        return proc_pidpath(pid, &buf, UInt32(buf.count)) > 0 ? String(cString: buf) : ""
+        if proc_pidpath(pid, &buf, UInt32(buf.count)) > 0 { return String(cString: buf) }
+        // a volte proc_pidpath fallisce (es. il processo principale di Chrome): ripiega
+        // sul percorso di esecuzione registrato negli argomenti del processo
+        return executablePath(pid) ?? ""
     }
 
     // Raggruppa per app: Chrome Helper, renderer, XPC dentro "Google Chrome.app" contano come Chrome
@@ -94,6 +101,14 @@ final class ProcessReader {
     }
 
     static func appKey(_ p: ProcessSample) -> (String, String?) {
+        // Chrome (e altri) eseguono il processo principale da una copia temporanea
+        // ".../code_sign_clone/.../Google Chrome.app.bundle/...": la riportiamo all'app vera
+        if let r = p.path.range(of: ".app.bundle/") {
+            let name = (String(p.path[..<r.lowerBound]) as NSString).lastPathComponent + ".app"
+            for dir in ["/Applications", NSHomeDirectory() + "/Applications"] where FileManager.default.fileExists(atPath: "\(dir)/\(name)") {
+                return ("\(dir)/\(name)", "\(dir)/\(name)")
+            }
+        }
         if let r = p.path.range(of: ".app/") ?? (p.path.hasSuffix(".app") ? p.path.range(of: ".app") : nil) {
             let bundle = String(p.path[..<r.upperBound]).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             let full = bundle.hasPrefix("/") ? bundle : "/" + bundle
@@ -116,8 +131,37 @@ final class ProcessReader {
     }
 }
 
-// Riga di comando completa (per riconoscere node/python e gli agenti AI)
-func processArguments(_ pid: pid_t) -> [String] {
+// Percorso dell'eseguibile dall'intestazione di KERN_PROCARGS2
+func executablePath(_ pid: pid_t) -> String? {
+    var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
+    var size = 0
+    guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 4 else { return nil }
+    var buf = [UInt8](repeating: 0, count: size)
+    guard sysctl(&mib, 3, &buf, &size, nil, 0) == 0, size > 4 else { return nil }
+    var end = 4
+    while end < size && buf[end] != 0 { end += 1 }
+    let p = String(decoding: buf[4..<end], as: UTF8.self)
+    return p.hasPrefix("/") ? p : nil
+}
+
+// Riga di comando completa (per riconoscere node/python e gli agenti AI).
+// In cache per pid + avvio: gli argomenti di un processo non cambiano.
+private var argsCache: [pid_t: (start: Date, args: [String])] = [:]
+private let argsLock = NSLock()
+
+func processArguments(_ pid: pid_t, startedAt: Date? = nil) -> [String] {
+    if let start = startedAt {
+        argsLock.lock(); defer { argsLock.unlock() }
+        if let c = argsCache[pid], c.start == start { return c.args }
+        let a = readProcessArguments(pid)
+        argsCache[pid] = (start, a)
+        if argsCache.count > 4000 { argsCache.removeAll() }
+        return a
+    }
+    return readProcessArguments(pid)
+}
+
+private func readProcessArguments(_ pid: pid_t) -> [String] {
     var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
     var size = 0
     guard sysctl(&mib, 3, nil, &size, nil, 0) == 0, size > 0 else { return [] }

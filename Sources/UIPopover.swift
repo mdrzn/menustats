@@ -102,7 +102,7 @@ struct SidebarItem: View {
                 }
             }
         }
-        .buttonStyle(.plain).onHover { hover = $0 }
+        .buttonStyle(.plain).focusEffectDisabled().onHover { hover = $0 }
     }
 }
 
@@ -305,7 +305,7 @@ struct AppsTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            TabHeader(title: "App", subtitle: "\(m.apps.count) app · \(m.processes.count) processi")
+            TabHeader(title: "App", subtitle: "\(m.apps.filter { $0.bundlePath != nil }.count) app · \(m.processes.count) processi")
             HStack(spacing: 8) {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass").font(.ui(11)).foregroundStyle(Theme.tertiary)

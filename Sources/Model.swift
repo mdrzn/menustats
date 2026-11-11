@@ -234,7 +234,7 @@ final class Monitor: ObservableObject {
         if detailed || settings.c.modules.contains(.disk) { disk = .read() }
         thermal = ProcessInfo.processInfo.thermalState
         detailTick += 1
-        if detailed && detailTick % 2 == 0 { refreshDetails() }
+        if detailed && detailTick % 3 == 0 { refreshDetails() }
         else if !detailed && detailTick % 15 == 0 && (settings.c.modules.contains(.ports) || settings.c.modules.contains(.agents)) { refreshDetails() }
         if detailed && trafficVisible && detailTick % 3 == 0 { refreshTraffic() }
         if detailed { refreshAudioLevels() }
