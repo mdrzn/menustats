@@ -41,7 +41,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         popover.animates = true
         popover.delegate = self
         popover.appearance = NSAppearance(named: .darkAqua)
-        popover.contentViewController = NSHostingController(rootView: PopoverView())
+        // Dimensione fissa da subito: senza, al primo clic SwiftUI calcola la misura dopo
+        // l'apertura e il popover compare in un punto provvisorio prima di spostarsi.
+        let size = NSSize(width: 480, height: 620)
+        let controller = NSHostingController(rootView: PopoverView())
+        controller.sizingOptions = []
+        controller.view.frame = NSRect(origin: .zero, size: size)
+        controller.view.layoutSubtreeIfNeeded()
+        popover.contentSize = size
+        popover.contentViewController = controller
 
         installHotKeyHandler()
         registerHotKey()
