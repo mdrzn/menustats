@@ -5,25 +5,27 @@
 <p align="center">A free, open-source system monitor for the macOS menu bar, made for people who build things.<br>
 Resources, apps, ports, AI agents, per-app volume and keep-awake in one panel.</p>
 
-<p align="center"><img src="docs/tab-home.png" width="420" alt="Overview"></p>
+<p align="center"><img src="docs/tour.webp" width="420" alt="A tour of MenuStats"></p>
 
 ## Features
 
 | | |
 |---|---|
 | ![System](docs/tab-system.png) | **System** — CPU per core (user/system), memory breakdown and pressure, swap, GPU, disk, battery, thermal state. Chip/SSD temperatures, fan speed and power draw (experimental). |
-| ![Apps](docs/tab-apps.png) | **Apps** — one row per app: helpers, renderers and XPC services roll up into the app that owns them. Expand to see every process, inspect its code signature (signer, Team ID, hardened runtime, sandbox, Rosetta), quit or force-quit. |
+| ![Apps](docs/tab-apps.png) | **Apps** — one row per app: helpers, renderers and XPC services roll up into the app that owns them. Expand to see every process, inspect its code signature (signer, Team ID, hardened runtime, sandbox, Rosetta), and restart, quit or force-quit an app. |
 | ![Ports](docs/tab-ports.png) | **Ports** — every listening port with what it serves (`next dev`, `vite`…), the project folder, who started it (Claude Code, Codex, Terminal, Docker), local-only vs network, and **orphaned dev servers**. Docker containers with their port mappings. |
 | ![Agents](docs/tab-agents.png) | **AI agents** — running sessions of Claude Code, Codex, Gemini CLI, Aider, OpenCode, Cursor Agent, Amp and Goose: project, terminal, uptime, CPU/memory of the whole process tree, open ports, busy or waiting. |
-| ![Volume](docs/tab-volume.png) | **Volume** — output/input device pickers, master volume, *"microphone in use by…"*, and an **experimental per-app volume** (0–150 %, remembered per app, no audio driver). |
+| ![Volume](docs/volume.webp) | **Volume** — output/input device pickers, master volume, *"microphone in use by…"*, and an **experimental per-app volume** (0–150 %, remembered per app, no audio driver). |
 | ![Keep awake](docs/tab-awake.png) | **Keep awake** — stop the Mac from sleeping for 15 min, 1–4 h or indefinitely (system only, or display too), and see which apps are currently preventing sleep. |
 | ![Network](docs/tab-network.png) | **Network** — live download/upload with history, traffic per app, interfaces and IP. |
+
+<p align="center"><img src="docs/overview.webp" width="420" alt="Overview with live charts"></p>
 
 The **Overview** also raises a *"Needs attention"* card for memory pressure, a nearly full disk, thermal throttling, apps hogging the CPU and orphaned dev servers — each with a one-click fix.
 
 ### Your menu bar, your way
 
-<p><img src="docs/looks.png" width="560" alt="Menu bar looks"></p>
+<p><img src="docs/menubar.webp" width="560" alt="Menu bar looks"></p>
 
 Pick which items to show and in what order (CPU, memory, network, GPU, temperature, power, disk, battery, ports, AI agents), six looks, value colours (menu bar, accent, or green→red by load), system/rounded/monospaced digits and an accent colour.
 
@@ -62,7 +64,7 @@ cd menustats
 open MenuStats.app
 ```
 
-`./build.sh --universal` builds an Apple Silicon + Intel app and `MenuStats.zip`. `./make-screenshots.sh` regenerates the images above with demo data.
+`./build.sh --universal` builds an Apple Silicon + Intel app and `MenuStats.zip`. `./make-screenshots.sh` and `./make-demos.sh` regenerate the images and animations above with demo data (the latter needs `img2webp`: `brew install webp`).
 
 ## Experimental features — please read
 

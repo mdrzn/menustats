@@ -112,7 +112,7 @@ struct Footer: View {
     var body: some View {
         HStack(spacing: 8) {
             Text("MenuStats").font(.ui(10.5, .semibold)).foregroundStyle(Theme.secondary)
-            Text("\(String(format: "%.1f", m.selfUsage.cpu * 100))% · \(formatBytes(m.selfUsage.memory))")
+            Text(Monitor.demoMode ? "0.3% · 21 MB" : "\(String(format: "%.1f", m.selfUsage.cpu * 100))% · \(formatBytes(m.selfUsage.memory))")
                 .font(.number(10, .medium)).foregroundStyle(Theme.tertiary)
             Spacer()
             Text("\(chipName) · acceso da \(formatDuration(m.uptime))").font(.ui(10)).foregroundStyle(Theme.tertiary)

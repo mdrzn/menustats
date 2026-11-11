@@ -138,3 +138,152 @@ struct LooksSheet: View {
         .background(Theme.background)
     }
 }
+
+// ================================================================ GIF dimostrative
+// MenuStats --gifs <cartella>: fotogrammi PNG per scena (poi make-gifs.sh li unisce con ffmpeg).
+// I dati demo vengono fatti evolvere a ogni fotogramma, cosi' grafici e valori si muovono.
+final class FrameRecorder {
+    let host: NSHostingView<AnyView>
+    let window: NSWindow
+    let size: CGSize
+
+    init<V: View>(_ view: V, size: CGSize, rounded: CGFloat) {
+        self.size = size
+        host = NSHostingView(rootView: AnyView(view.frame(width: size.width, height: size.height)
+            .clipShape(RoundedRectangle(cornerRadius: rounded, style: .continuous))))
+        host.frame = NSRect(origin: .zero, size: size)
+        window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: size.width, height: size.height),
+                          styleMask: .borderless, backing: .buffered, defer: false)
+        window.isOpaque = false; window.backgroundColor = .clear
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.contentView = host
+        window.orderFrontRegardless()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+    }
+
+    func capture(_ url: URL) {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.03))   // lascia a SwiftUI il tempo di ridisegnare
+        host.layoutSubtreeIfNeeded()
+        host.display()
+        guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
+        host.cacheDisplay(in: host.bounds, to: rep)
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
+    }
+
+    func close() { window.orderOut(nil) }
+}
+
+extension Screenshots {
+    static func gifs(_ out: URL) {
+        let fm = FileManager.default
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.prohibited)
+        Prefs.persist = false
+        Monitor.demoMode = true
+        let m = Monitor.shared
+        fillDemo(m)
+        var t = 0
+        func scene(_ name: String) -> URL {
+            let d = out.appendingPathComponent(name)
+            try? fm.removeItem(at: d); try? fm.createDirectory(at: d, withIntermediateDirectories: true)
+            return d
+        }
+        let popover = CGSize(width: 480, height: 620)
+
+        // 1. giro delle schede
+        var dir = scene("tour")
+        Nav.shared.tab = "home"
+        var rec = FrameRecorder(PopoverView(), size: popover, rounded: 14)
+        var n = 0
+        for tab in ["home", "apps", "system", "ports", "agents", "volume", "awake"] {
+            Nav.shared.tab = tab
+            for _ in 0..<13 { evolve(m, t); t += 1; rec.capture(dir.appendingPathComponent(String(format: "%04d.png", n))); n += 1 }
+        }
+        rec.close()
+
+        // 2. panoramica dal vivo
+        dir = scene("overview")
+        Nav.shared.tab = "home"
+        rec = FrameRecorder(PopoverView(), size: popover, rounded: 14)
+        for i in 0..<40 { evolve(m, t); t += 1; rec.capture(dir.appendingPathComponent(String(format: "%04d.png", i))) }
+        rec.close()
+
+        // 3. barra dei menu: i look uno dopo l'altro
+        dir = scene("menubar")
+        let bar = MenuBarShowcase()
+        rec = FrameRecorder(bar, size: CGSize(width: 620, height: 150), rounded: 14)
+        n = 0
+        for look in MenuLook.allCases {
+            MenuBarShowcase.look = look
+            Prefs.shared.objectWillChange.send()
+            for _ in 0..<10 { evolve(m, t); t += 1; rec.capture(dir.appendingPathComponent(String(format: "%04d.png", n))); n += 1 }
+        }
+        rec.close()
+
+        // 4. volume per app: i cursori si spostano
+        dir = scene("volume")
+        Nav.shared.tab = "volume"
+        rec = FrameRecorder(PopoverView(), size: popover, rounded: 14)
+        for i in 0..<40 {
+            let f = Double(i) / 39
+            let ease = f < 0.5 ? 2 * f * f : 1 - pow(-2 * f + 2, 2) / 2
+            Prefs.shared.c.appVolumes["com.apple.Music"] = 1.0 - 0.6 * ease
+            Prefs.shared.c.appVolumes["com.apple.FaceTime"] = 1.0 + 0.35 * ease
+            m.objectWillChange.send()
+            evolve(m, t); t += 1
+            rec.capture(dir.appendingPathComponent(String(format: "%04d.png", i)))
+        }
+        rec.close()
+        print("ok \(out.path)")
+    }
+
+    // Fa evolvere i dati demo di un passo (curve morbide e deterministiche)
+    static func evolve(_ m: Monitor, _ i: Int) {
+        let t = Double(i)
+        m.cpu = max(0.04, 0.24 + 0.12 * sin(t / 7) + 0.05 * sin(t / 2.1))
+        m.cpuUser = m.cpu * 0.7; m.cpuSystem = m.cpu * 0.3
+        m.perCore = (0..<10).map { k in max(0.02, min(1, m.cpu * (1.6 - Double(k) * 0.12) + 0.12 * sin(t / 3 + Double(k)))) }
+        m.cpuHistory.add(m.cpu)
+        m.memory.app = UInt64((11 + 0.4 * sin(t / 20)) * Double(1 << 30))
+        m.memory.used = m.memory.app + m.memory.wired + m.memory.compressed
+        m.memHistory.add(m.memory.fraction)
+        m.down = max(20_000, 1_200_000 + 1_000_000 * sin(t / 4) + 500_000 * sin(t / 1.7))
+        m.up = max(4_000, 70_000 + 50_000 * sin(t / 3 + 1))
+        m.downHistory.add(m.down); m.upHistory.add(m.up)
+        m.gpu = max(0.02, 0.11 + 0.07 * sin(t / 5)); m.gpuHistory.add(m.gpu ?? 0)
+        let temp = 48 + 3 * sin(t / 9)
+        m.sensors.temperatures = m.sensors.temperatures.map { SensorReading(name: $0.name, value: $0.name.contains("NAND") ? 37 : temp - 2 + Double($0.name.count % 3)) }
+        m.tempHistory.add(temp)
+        m.sensors.systemPower = 13 + 3 * sin(t / 6)
+        if !m.apps.isEmpty {
+            m.apps[0].processes[0].cpu = 6 + 4 * sin(t / 5)
+            m.apps[1].processes[1].cpu = 3 + 2.5 * sin(t / 4 + 2)
+        }
+        if !m.agents.isEmpty { m.agents[0].cpu = 8 + 6 * sin(t / 3) }
+    }
+}
+
+// Barra dei menu grande su uno sfondo, con il nome del look
+struct MenuBarShowcase: View {
+    static var look: MenuLook = .stacked
+    @ObservedObject var s = Prefs.shared
+    @ObservedObject var m = Monitor.shared
+    var body: some View {
+        let config: Config = { var c = s.c; c.look = Self.look; c.valueColor = Self.look == .graph ? .accent : .menuBar; return c }()
+        VStack(spacing: 14) {
+            MenuBarPreview(config: config, height: 30)
+                .scaleEffect(1.5)
+                .frame(width: 400, height: 46)
+            HStack(spacing: 6) {
+                ForEach(MenuLook.allCases) { l in
+                    Text(l.title).font(.ui(11, l == Self.look ? .semibold : .medium))
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .foregroundStyle(l == Self.look ? Theme.text : Theme.tertiary)
+                        .background(Capsule().fill(l == Self.look ? s.accent.opacity(0.25) : .clear))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(LinearGradient(colors: [Color(hex: "1E2430"), Color(hex: "0F1115")], startPoint: .topLeading, endPoint: .bottomTrailing))
+    }
+}

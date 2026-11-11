@@ -141,6 +141,10 @@ if let i = CommandLine.arguments.firstIndex(of: "--screenshots"), i + 1 < Comman
     Screenshots.run(URL(fileURLWithPath: CommandLine.arguments[i + 1]))
     exit(0)
 }
+if let i = CommandLine.arguments.firstIndex(of: "--gifs"), i + 1 < CommandLine.arguments.count {
+    Screenshots.gifs(URL(fileURLWithPath: CommandLine.arguments[i + 1]))
+    exit(0)
+}
 let delegate = AppDelegate()
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
