@@ -54,8 +54,11 @@ Get a notification when **an AI agent finishes or is waiting for you**, a **dev 
 ### Option 1 — Homebrew
 
 ```sh
+brew tap mdrzn/tap && brew trust mdrzn/tap      # once: Homebrew asks you to trust third-party taps
 brew install --cask --no-quarantine mdrzn/tap/menustats
 ```
+
+Update with `brew upgrade --cask menustats`.
 
 `--no-quarantine` skips the first-launch Gatekeeper block described below (MenuStats isn't notarized). Without it, Homebrew installs the app normally and you allow it once as in Option 2.
 
