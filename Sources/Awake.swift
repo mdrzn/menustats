@@ -15,7 +15,7 @@ final class AwakeController: ObservableObject {
         stop()
         let type = (mode == .display ? kIOPMAssertionTypePreventUserIdleDisplaySleep : kIOPMAssertionTypePreventUserIdleSystemSleep) as CFString
         let ok = IOPMAssertionCreateWithName(type, IOPMAssertionLevel(kIOPMAssertionLevelOn),
-                                             "MenuStats: tieni sveglio" as CFString, &assertion)
+                                             "MenuStats: keep awake" as CFString, &assertion)
         guard ok == kIOReturnSuccess else { return }
         isActive = true
         if let m = minutes {
@@ -60,7 +60,7 @@ func readSleepBlockers() -> [SleepBlocker] {
             let p = pid_t(pid.int32Value)
             guard p != getpid() else { continue }
             let proc = a["Process Name"] as? String ?? ((ProcessReader.path(p) as NSString).lastPathComponent)
-            out.append(SleepBlocker(pid: p, process: proc, name: a["AssertName"] as? String ?? "", type: type.contains("Display") ? "schermo" : "sistema"))
+            out.append(SleepBlocker(pid: p, process: proc, name: a["AssertName"] as? String ?? "", type: type.contains("Display") ? L("schermo") : L("sistema")))
         }
     }
     return out.sorted { $0.process < $1.process }

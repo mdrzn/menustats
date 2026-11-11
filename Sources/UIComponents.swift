@@ -5,32 +5,95 @@ import SwiftUI
 import AppKit
 
 // ================================================================ token
-enum Theme {
-    static let background = Color(hex: "101216")
-    static let backgroundTop = Color(hex: "171A21")
-    static let sidebar = Color(hex: "0C0E11")
-    static let card = Color.white.opacity(0.045)
-    static let cardHover = Color.white.opacity(0.075)
-    static let stroke = Color.white.opacity(0.075)
-    static let text = Color.white.opacity(0.93)
-    static let secondary = Color.white.opacity(0.56)
-    static let tertiary = Color.white.opacity(0.34)
-    static let warning = Color(hex: "F5B942")
-    static let danger = Color(hex: "FB7185")
-    static let radius: CGFloat = 12
-
-    // verde -> ambra -> rosso in base al carico (0...1)
-    static func load(_ f: Double) -> Color {
-        f < 0.6 ? Color(hex: "4ADE80") : f < 0.85 ? warning : danger
+// Palette del tema scelto. Theme.* legge la palette corrente, aggiornata da Prefs quando
+// cambiano le impostazioni; le viste radice si ricostruiscono (con .id) al cambio di tema.
+enum ThemeChoice: String, Codable, CaseIterable, Identifiable {
+    case auto, graphite, midnight, paper, contrast
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .auto: L("Automatico"); case .graphite: L("Grafite"); case .midnight: L("Mezzanotte")
+        case .paper: L("Carta"); case .contrast: L("Contrasto alto")
+        }
     }
 }
 
-extension Font {
-    static func ui(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight) }
-    static func number(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font {
-        .system(size: size, weight: weight, design: .rounded).monospacedDigit()
+struct Palette {
+    var dark: Bool
+    var background, backgroundTop, sidebar: Color
+    var ink: Color                 // colore base per riempimenti e testo (bianco su scuro, nero su chiaro)
+    var cardAlpha, hoverAlpha, strokeAlpha: Double
+    var textAlpha, secondaryAlpha, tertiaryAlpha: Double
+
+    static let graphite = Palette(dark: true, background: Color(hex: "101216"), backgroundTop: Color(hex: "171A21"), sidebar: Color(hex: "0C0E11"),
+                                  ink: .white, cardAlpha: 0.045, hoverAlpha: 0.075, strokeAlpha: 0.075, textAlpha: 0.93, secondaryAlpha: 0.56, tertiaryAlpha: 0.34)
+    static let midnight = Palette(dark: true, background: Color(hex: "0A1020"), backgroundTop: Color(hex: "131C33"), sidebar: Color(hex: "070C18"),
+                                  ink: .white, cardAlpha: 0.05, hoverAlpha: 0.08, strokeAlpha: 0.08, textAlpha: 0.94, secondaryAlpha: 0.6, tertiaryAlpha: 0.38)
+    static let paper = Palette(dark: false, background: Color(hex: "EFECE6"), backgroundTop: Color(hex: "F8F6F2"), sidebar: Color(hex: "E5E1D9"),
+                               ink: .black, cardAlpha: 0.035, hoverAlpha: 0.06, strokeAlpha: 0.08, textAlpha: 0.87, secondaryAlpha: 0.56, tertiaryAlpha: 0.38)
+    static let contrast = Palette(dark: true, background: .black, backgroundTop: Color(hex: "0A0A0A"), sidebar: .black,
+                                  ink: .white, cardAlpha: 0.08, hoverAlpha: 0.14, strokeAlpha: 0.3, textAlpha: 1, secondaryAlpha: 0.82, tertiaryAlpha: 0.64)
+
+    static func of(_ c: ThemeChoice) -> Palette {
+        switch c {
+        case .graphite: return graphite
+        case .midnight: return midnight
+        case .paper: return paper
+        case .contrast: return contrast
+        case .auto:
+            let dark = NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) != .aqua
+            return dark ? graphite : paper
+        }
     }
-    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight, design: .monospaced) }
+}
+
+enum Theme {
+    static var palette = Palette.graphite
+    static var scale: CGFloat = 1          // dimensione del testo
+    static var opacity: Double = 1         // < 1: lascia trasparire il materiale del pannello
+    static var areaColors = false          // colori diversi per CPU, memoria, rete…
+    static var accent = Color(hex: "4FD1A5")
+
+    static var dark: Bool { palette.dark }
+    static var ink: Color { palette.ink }
+    static var background: Color { palette.background.opacity(opacity) }
+    static var backgroundTop: Color { palette.backgroundTop.opacity(opacity) }
+    static var sidebar: Color { palette.sidebar }
+    static var card: Color { ink.opacity(palette.cardAlpha) }
+    static var cardHover: Color { ink.opacity(palette.hoverAlpha) }
+    static var stroke: Color { ink.opacity(palette.strokeAlpha) }
+    static var text: Color { ink.opacity(palette.textAlpha) }
+    static var secondary: Color { ink.opacity(palette.secondaryAlpha) }
+    static var tertiary: Color { ink.opacity(palette.tertiaryAlpha) }
+    static var warning: Color { dark ? Color(hex: "F5B942") : Color(hex: "C27C0E") }
+    static var danger: Color { dark ? Color(hex: "FB7185") : Color(hex: "DC2645") }
+    static let radius: CGFloat = 12
+    static var onAccent: Color { Color.black.opacity(0.82) }      // testo sopra un riempimento d'accento
+
+    // Colori per area (se attivi), altrimenti l'accento
+    static var cpuColor: Color { areaColors ? Color(hex: "4FD1A5") : accent }
+    static var memColor: Color { areaColors ? Color(hex: "A78BFA") : accent }
+    static var netColor: Color { areaColors ? Color(hex: "38BDF8") : accent }
+    static var gpuColor: Color { areaColors ? Color(hex: "F472B6") : accent }
+    static var tempColor: Color { areaColors ? Color(hex: "F59E0B") : accent }
+    static var diskColor: Color { areaColors ? Color(hex: "94A3B8") : accent }
+
+    // verde -> ambra -> rosso in base al carico (0...1); soglie dalle impostazioni
+    static var loadThresholds: (Double, Double) = (0.6, 0.85)
+    static func load(_ f: Double) -> Color {
+        f < loadThresholds.0 ? Color(hex: dark ? "4ADE80" : "16A34A") : f < loadThresholds.1 ? warning : danger
+    }
+
+    // Chiave che cambia quando cambia qualcosa che richiede di ricostruire le viste
+    static var identity: String { "\(palette.dark)\(palette.background)\(scale)\(opacity)\(areaColors)\(accent)\(Lang.english)" }
+}
+
+extension Font {
+    static func ui(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size * Theme.scale, weight: weight) }
+    static func number(_ size: CGFloat, _ weight: Font.Weight = .semibold) -> Font {
+        .system(size: size * Theme.scale, weight: weight, design: .rounded).monospacedDigit()
+    }
+    static func mono(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size * Theme.scale, weight: weight, design: .monospaced) }
 }
 
 // ================================================================ contenitori
@@ -114,7 +177,7 @@ struct Meter: View {
     var body: some View {
         GeometryReader { g in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.07))
+                Capsule().fill(Theme.ink.opacity(0.07))
                 Capsule().fill(color).frame(width: max(height, g.size.width * CGFloat(min(max(value, 0), 1))))
             }
         }.frame(height: height)
@@ -133,7 +196,7 @@ struct StackedMeter: View {
                 }
                 Spacer(minLength: 0)
             }
-            .background(Color.white.opacity(0.07))
+            .background(Theme.ink.opacity(0.07))
             .clipShape(Capsule())
         }.frame(height: height)
     }
@@ -146,7 +209,7 @@ struct Ring: View {
     var lineWidth: CGFloat = 4
     var body: some View {
         ZStack {
-            Circle().stroke(Color.white.opacity(0.08), lineWidth: lineWidth)
+            Circle().stroke(Theme.ink.opacity(0.08), lineWidth: lineWidth)
             Circle().trim(from: 0, to: CGFloat(min(max(value, 0), 1)))
                 .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
@@ -190,7 +253,7 @@ struct Badge: View {
     var body: some View {
         Text(text).font(.ui(9.5, .semibold))
             .padding(.horizontal, 6).padding(.vertical, 2)
-            .foregroundStyle(filled ? Color.black.opacity(0.8) : color)
+            .foregroundStyle(filled ? Theme.onAccent : color)
             .background(Capsule().fill(filled ? color : color.opacity(0.13)))
     }
 }
@@ -212,8 +275,8 @@ struct PillButton: View {
         Button(action: action) {
             Text(title).font(.ui(10.5, .semibold))
                 .padding(.horizontal, 9).padding(.vertical, 4)
-                .foregroundStyle(prominent ? Color.black.opacity(0.85) : color)
-                .background(Capsule().fill(prominent ? color : Color.white.opacity(hover ? 0.14 : 0.08)))
+                .foregroundStyle(prominent ? Theme.onAccent : color)
+                .background(Capsule().fill(prominent ? color : Theme.ink.opacity(hover ? 0.14 : 0.08)))
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
@@ -230,7 +293,7 @@ struct IconButton: View {
             Image(systemName: symbol).font(.ui(11, .medium))
                 .frame(width: 22, height: 22)
                 .foregroundStyle(hover ? Theme.text : Theme.secondary)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(hover ? 0.1 : 0)))
+                .background(RoundedRectangle(cornerRadius: 6).fill(Theme.ink.opacity(hover ? 0.1 : 0)))
         }
         .buttonStyle(.plain).help(help).onHover { hover = $0 }
     }
@@ -271,7 +334,7 @@ struct AppIconView: View {
         } else {
             Image(systemName: fallback).font(.ui(size * 0.55, .medium)).foregroundStyle(Theme.secondary)
                 .frame(width: size, height: size)
-                .background(RoundedRectangle(cornerRadius: size * 0.25).fill(Color.white.opacity(0.07)))
+                .background(RoundedRectangle(cornerRadius: size * 0.25).fill(Theme.ink.opacity(0.07)))
         }
     }
 }
@@ -294,7 +357,7 @@ struct Segmented<T: Hashable>: View {
             }
         }
         .padding(2)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.05)))
+        .background(RoundedRectangle(cornerRadius: 8).fill(Theme.ink.opacity(0.05)))
     }
 }
 
@@ -310,11 +373,11 @@ struct ThinSlider: View {
             let w = g.size.width
             let f = CGFloat((value - range.lowerBound) / (range.upperBound - range.lowerBound))
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.09)).frame(height: 4)
+                Capsule().fill(Theme.ink.opacity(0.09)).frame(height: 4)
                 Capsule().fill(color).frame(width: max(4, w * f), height: 4)
                 if let m = marker {
                     let mf = CGFloat((m - range.lowerBound) / (range.upperBound - range.lowerBound))
-                    Rectangle().fill(Color.white.opacity(0.35)).frame(width: 1.5, height: 9).offset(x: w * mf - 0.75)
+                    Rectangle().fill(Theme.ink.opacity(0.35)).frame(width: 1.5, height: 9).offset(x: w * mf - 0.75)
                 }
                 Circle().fill(Color.white).frame(width: dragging ? 13 : 11, height: dragging ? 13 : 11)
                     .shadow(color: .black.opacity(0.4), radius: 2, y: 1)

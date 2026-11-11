@@ -40,10 +40,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         popover.behavior = .transient
         popover.animates = true
         popover.delegate = self
-        popover.appearance = NSAppearance(named: .darkAqua)
+        popover.appearance = NSAppearance(named: Theme.dark ? .darkAqua : .aqua)
         // Dimensione fissa da subito: senza, al primo clic SwiftUI calcola la misura dopo
         // l'apertura e il popover compare in un punto provvisorio prima di spostarsi.
-        let size = NSSize(width: 480, height: 620)
+        let size = PopoverView.size
         let controller = NSHostingController(rootView: PopoverView())
         controller.sizingOptions = []
         controller.view.frame = NSRect(origin: .zero, size: size)
@@ -53,6 +53,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
         installHotKeyHandler()
         registerHotKey()
+        Prefs.shared.objectWillChange.receive(on: RunLoop.main)
+            .sink { [weak self] _ in DispatchQueue.main.async { self?.applyTheme() } }
+            .store(in: &bag)
+    }
+
+    func applyTheme() {
+        let appearance = NSAppearance(named: Theme.dark ? .darkAqua : .aqua)
+        popover.appearance = appearance
+        settingsWindow?.appearance = appearance
+        if popover.contentSize != PopoverView.size { popover.contentSize = PopoverView.size }
     }
 
     func resizeStatusItem() {
@@ -77,11 +87,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     func showMenu() {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Impostazioni…", action: #selector(openSettings), keyEquivalent: ",").target = self
-        let awake = menu.addItem(withTitle: monitor.awake.isActive ? "Disattiva \"tieni sveglio\"" : "Tieni sveglio il Mac", action: #selector(toggleAwake), keyEquivalent: "")
+        menu.addItem(withTitle: L("Impostazioni…"), action: #selector(openSettings), keyEquivalent: ",").target = self
+        let awake = menu.addItem(withTitle: monitor.awake.isActive ? L("Disattiva \"tieni sveglio\"") : L("Tieni sveglio il Mac"), action: #selector(toggleAwake), keyEquivalent: "")
         awake.target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Esci da MenuStats", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: L("Esci da MenuStats"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
@@ -99,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             w.styleMask = [.titled, .closable, .fullSizeContentView]
             w.titlebarAppearsTransparent = true
             w.titleVisibility = .hidden
-            w.appearance = NSAppearance(named: .darkAqua)
+            w.appearance = NSAppearance(named: Theme.dark ? .darkAqua : .aqua)
             w.isReleasedWhenClosed = false
             w.delegate = self
             w.center()

@@ -11,9 +11,9 @@ enum MenuModule: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .cpu: "CPU"; case .memory: "Memoria"; case .network: "Rete"; case .gpu: "GPU"
-        case .temperature: "Temperatura"; case .power: "Consumo"; case .disk: "Disco"
-        case .battery: "Batteria"; case .ports: "Porte"; case .agents: "Agenti AI"
+        case .cpu: L("CPU"); case .memory: L("Memoria"); case .network: L("Rete"); case .gpu: L("GPU")
+        case .temperature: L("Temperatura"); case .power: L("Consumo"); case .disk: L("Disco")
+        case .battery: L("Batteria"); case .ports: L("Porte"); case .agents: L("Agenti AI")
         }
     }
     var symbol: String {
@@ -31,8 +31,8 @@ enum MenuLook: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .stacked: "Impilato"; case .compact: "Compatto"; case .graph: "Grafico"
-        case .pill: "Pillola"; case .outline: "Contorno"; case .icons: "Icone"
+        case .stacked: L("Impilato"); case .compact: L("Compatto"); case .graph: L("Grafico")
+        case .pill: L("Pillola"); case .outline: L("Contorno"); case .icons: L("Icone")
         }
     }
 }
@@ -40,13 +40,13 @@ enum MenuLook: String, Codable, CaseIterable, Identifiable {
 enum ValueColor: String, Codable, CaseIterable, Identifiable {
     case menuBar, accent, load
     var id: String { rawValue }
-    var title: String { switch self { case .menuBar: "Come la barra"; case .accent: "Accento"; case .load: "Per carico" } }
+    var title: String { switch self { case .menuBar: L("Come la barra"); case .accent: L("Accento"); case .load: L("Per carico") } }
 }
 
 enum FontStyle: String, Codable, CaseIterable, Identifiable {
     case system, rounded, mono
     var id: String { rawValue }
-    var title: String { switch self { case .system: "Sistema"; case .rounded: "Arrotondato"; case .mono: "Monospaziato" } }
+    var title: String { switch self { case .system: L("Sistema"); case .rounded: L("Arrotondato"); case .mono: L("Monospaziato") } }
     var design: Font.Design { switch self { case .system: .default; case .rounded: .rounded; case .mono: .monospaced } }
 }
 
@@ -68,6 +68,12 @@ struct Config: Codable, Equatable {
     var lastTab = "home"
     var cpuAlert = 90.0                      // % di un core sostenuta che fa scattare l'avviso
     var hotkeyEnabled = true                 // ⌥⌘M apre il popover
+    var language: AppLanguage = .system
+    var theme: ThemeChoice = .auto
+    var textScale = 1.0                      // 0.92 compatto, 1 normale, 1.1 grande
+    var panelOpacity = 1.0                   // 1 opaco, 0.85 leggero, 0.7 vetro
+    var areaColors = false
+    var loadLow = 0.6, loadHigh = 0.85       // soglie del colore "per carico"
     var perAppVolume = false                 // sperimentale: chiede il permesso di registrare l'audio
 
     static func load() -> Config {
@@ -85,7 +91,31 @@ struct Config: Codable, Equatable {
 final class Prefs: ObservableObject {
     static let shared = Prefs()
     static var persist = true                // false negli screenshot: non tocca le impostazioni vere
-    @Published var c = Config.load() { didSet { if c != oldValue && Prefs.persist { c.save() } } }
+    @Published var c = Config.load() {
+        didSet {
+            if c != oldValue && Prefs.persist { c.save() }
+            apply()
+        }
+    }
+    init() {
+        apply()
+        // tema "Automatico": segue il passaggio chiaro/scuro di sistema
+        DistributedNotificationCenter.default().addObserver(forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
+                                                            object: nil, queue: .main) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self?.apply(); self?.objectWillChange.send() }
+        }
+    }
+
+    // Copia le impostazioni nei valori statici letti dall'interfaccia
+    func apply() {
+        Lang.english = Lang.resolve(c.language)
+        Theme.palette = Palette.of(c.theme)
+        Theme.scale = CGFloat(c.textScale)
+        Theme.opacity = c.panelOpacity
+        Theme.areaColors = c.areaColors
+        Theme.accent = Color(hex: c.accent)
+        Theme.loadThresholds = (c.loadLow, c.loadHigh)
+    }
     @Published var launchAtLogin = LoginItem.isOn { didSet { LoginItem.set(launchAtLogin) } }
     var accent: Color { Color(hex: c.accent) }
 }
@@ -312,31 +342,31 @@ final class Monitor: ObservableObject {
     private func updateAlerts(threshold: Double) {
         var out: [Alert] = []
         if memory.pressure != .normal {
-            out.append(Alert(id: "mem", severity: memory.pressure == .critical ? 2 : 1, title: "Memoria sotto pressione",
-                             detail: "\(formatBytes(memory.used)) usati su \(formatBytes(memory.total))", actionTitle: "App", action: .openTab("apps")))
+            out.append(Alert(id: "mem", severity: memory.pressure == .critical ? 2 : 1, title: L("Memoria sotto pressione"),
+                             detail: L("%@ usati su %@", formatBytes(memory.used), formatBytes(memory.total)), actionTitle: L("App"), action: .openTab("apps")))
         }
         if disk.total > 0 && Double(disk.free) / Double(disk.total) < 0.1 {
-            out.append(Alert(id: "disk", severity: 1, title: "Disco quasi pieno", detail: "\(formatBytes(UInt64(disk.free))) liberi",
+            out.append(Alert(id: "disk", severity: 1, title: L("Disco quasi pieno"), detail: L("%@ liberi", formatBytes(UInt64(disk.free))),
                              actionTitle: nil, action: nil))
         }
         if thermal == .serious || thermal == .critical {
-            out.append(Alert(id: "thermal", severity: 2, title: "Il Mac è molto caldo", detail: "macOS sta limitando le prestazioni",
-                             actionTitle: "Sistema", action: .openTab("system")))
+            out.append(Alert(id: "thermal", severity: 2, title: L("Il Mac è molto caldo"), detail: L("macOS sta limitando le prestazioni"),
+                             actionTitle: L("Sistema"), action: .openTab("system")))
         }
         // app che consumano tanta CPU per piu' campioni di fila (~10 s)
         var streak: [String: Int] = [:]
         for g in apps where g.cpu >= threshold && g.name != "MenuStats" { streak[g.key] = (hogStreak[g.key] ?? 0) + 1 }
         hogStreak = streak
         for g in apps where (streak[g.key] ?? 0) >= 5 {
-            out.append(Alert(id: "hog-\(g.key)", severity: 1, title: "\(g.name) usa molta CPU",
-                             detail: "\(formatPercent(g.cpu / 100)) da un po'", actionTitle: "Chiudi", action: .quitApp(g)))
+            out.append(Alert(id: "hog-\(g.key)", severity: 1, title: L("%@ usa molta CPU", g.name),
+                             detail: L("%@ da un po'", formatPercent(g.cpu / 100)), actionTitle: L("Chiudi"), action: .quitApp(g)))
         }
         let orphans = ports.filter(\.orphan)
         if !orphans.isEmpty {
             out.append(Alert(id: "orphans", severity: 1,
-                             title: orphans.count == 1 ? "Un server di sviluppo orfano" : "\(orphans.count) server di sviluppo orfani",
+                             title: orphans.count == 1 ? L("Un server di sviluppo orfano") : L("%d server di sviluppo orfani", orphans.count),
                              detail: orphans.map { ":\($0.port) \($0.label)" }.joined(separator: " · "),
-                             actionTitle: orphans.count == 1 ? "Chiudi" : "Chiudi \(orphans.count)", action: .killPorts(orphans)))
+                             actionTitle: orphans.count == 1 ? L("Chiudi") : L("Chiudi %d", orphans.count), action: .killPorts(orphans)))
         }
         alerts = out
     }

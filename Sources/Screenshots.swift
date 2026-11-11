@@ -11,6 +11,7 @@ enum Screenshots {
         Prefs.persist = false
         Monitor.demoMode = true
         let m = Monitor.shared
+        applyArgs()
         fillDemo(m)
         for tab in ["home", "apps", "system", "volume", "ports", "agents", "awake", "network"] {
             Nav.shared.tab = tab
@@ -28,7 +29,7 @@ enum Screenshots {
         host.frame = NSRect(origin: .zero, size: size)
         let w = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: size.width, height: size.height), styleMask: .borderless, backing: .buffered, defer: false)
         w.isOpaque = false; w.backgroundColor = .clear
-        w.appearance = NSAppearance(named: .darkAqua)
+        w.appearance = NSAppearance(named: Theme.dark ? .darkAqua : .aqua)
         w.contentView = host
         w.orderFrontRegardless()
         host.layoutSubtreeIfNeeded()
@@ -38,6 +39,13 @@ enum Screenshots {
         host.cacheDisplay(in: host.bounds, to: rep)
         try? rep.representation(using: .png, properties: [:])?.write(to: url)
         w.orderOut(nil)
+    }
+
+    // --theme graphite|midnight|paper|contrast  --lang it|en   (per provare temi e lingue)
+    static func applyArgs() {
+        let a = CommandLine.arguments
+        if let i = a.firstIndex(of: "--theme"), i + 1 < a.count, let t = ThemeChoice(rawValue: a[i + 1]) { Prefs.shared.c.theme = t }
+        if let i = a.firstIndex(of: "--lang"), i + 1 < a.count { Prefs.shared.c.language = a[i + 1] == "en" ? .english : .italian }
     }
 
     static func wave(_ n: Int, base: Double, amp: Double, seed: Double) -> [Double] {
@@ -80,37 +88,37 @@ enum Screenshots {
         }
         m.apps = [
             group("Safari", "/Applications/Safari.app", safari),
-            group("Terminale", "/System/Applications/Utilities/Terminal.app", [proc(510, "Terminal", "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal", 4.8, 310), proc(511, "node", "/opt/homebrew/bin/node", 3.1, 640)]),
-            group("Musica", "/System/Applications/Music.app", [proc(620, "Music", "/System/Applications/Music.app/Contents/MacOS/Music", 2.2, 280)]),
-            group("Note", "/System/Applications/Notes.app", [proc(630, "Notes", "/System/Applications/Notes.app/Contents/MacOS/Notes", 0.6, 190)]),
-            group("Anteprima", "/System/Applications/Preview.app", [proc(640, "Preview", "/System/Applications/Preview.app/Contents/MacOS/Preview", 0.2, 120)]),
+            group(L("Terminale"), "/System/Applications/Utilities/Terminal.app", [proc(510, "Terminal", "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal", 4.8, 310), proc(511, "node", "/opt/homebrew/bin/node", 3.1, 640)]),
+            group(L("Musica"), "/System/Applications/Music.app", [proc(620, "Music", "/System/Applications/Music.app/Contents/MacOS/Music", 2.2, 280)]),
+            group(L("Note"), "/System/Applications/Notes.app", [proc(630, "Notes", "/System/Applications/Notes.app/Contents/MacOS/Notes", 0.6, 190)]),
+            group(L("Anteprima"), "/System/Applications/Preview.app", [proc(640, "Preview", "/System/Applications/Preview.app/Contents/MacOS/Preview", 0.2, 120)]),
             group("Finder", "/System/Library/CoreServices/Finder.app", [proc(650, "Finder", "/System/Library/CoreServices/Finder.app/Contents/MacOS/Finder", 0.1, 160)]),
         ]
         m.processes = m.apps.flatMap(\.processes)
         m.ports = [
             ListeningPort(port: 3000, pid: 711, command: "node", address: "127.0.0.1", label: "next dev", project: "shop-frontend", owner: "Claude Code"),
             ListeningPort(port: 4000, pid: 712, command: "node", address: "*", label: "api", project: "shop-backend", owner: "Codex"),
-            ListeningPort(port: 5173, pid: 713, command: "node", address: "127.0.0.1", label: "vite", project: "docs", owner: "Terminale", orphan: true),
+            ListeningPort(port: 5173, pid: 713, command: "node", address: "127.0.0.1", label: "vite", project: "docs", owner: L("Terminale"), orphan: true),
             ListeningPort(port: 5432, pid: 714, command: "com.docker", address: "*", label: "postgres", project: "postgres:17", owner: "Docker"),
         ]
         m.agents = [
             AgentSession(pid: 701, kind: "Claude Code", cwd: NSHomeDirectory() + "/code/shop-frontend", startedAt: Date().addingTimeInterval(-4_700),
-                         cpu: 12.4, memory: 780 << 20, children: 5, ports: [3000], terminal: "Terminale"),
+                         cpu: 12.4, memory: 780 << 20, children: 5, ports: [3000], terminal: L("Terminale")),
             AgentSession(pid: 702, kind: "Codex", cwd: NSHomeDirectory() + "/code/shop-backend", startedAt: Date().addingTimeInterval(-1_300),
                          cpu: 0.3, memory: 210 << 20, children: 2, ports: [4000], terminal: "Ghostty"),
         ]
         m.containers = [Container(id: "a1", name: "postgres", image: "postgres:17", status: "Up 3 hours", running: true, ports: "", hostPorts: [5432]),
                         Container(id: "a2", name: "redis", image: "redis:7-alpine", status: "Exited", running: false, ports: "", hostPorts: [])]
-        m.traffic = [AppTraffic(name: "Safari", down: 1_420_000, up: 41_000), AppTraffic(name: "Musica", down: 320_000, up: 6_000),
+        m.traffic = [AppTraffic(name: "Safari", down: 1_420_000, up: 41_000), AppTraffic(name: L("Musica"), down: 320_000, up: 6_000),
                      AppTraffic(name: "node", down: 64_000, up: 38_000), AppTraffic(name: "mDNSResponder", down: 2_000, up: 1_000)]
-        m.blockers = [SleepBlocker(pid: 620, process: "Music", name: "Riproduzione audio", type: "sistema")]
-        m.alerts = [Alert(id: "orph", severity: 1, title: "Un server di sviluppo orfano", detail: ":5173 vite · docs", actionTitle: "Chiudi", action: .killPorts([])),
-                    Alert(id: "hog", severity: 1, title: "Safari usa molta CPU", detail: "140% da un po'", actionTitle: "Chiudi", action: .openTab("apps"))]
+        m.blockers = [SleepBlocker(pid: 620, process: "Music", name: L("Riproduzione audio"), type: "sistema")]
+        m.alerts = [Alert(id: "orph", severity: 1, title: L("Un server di sviluppo orfano"), detail: ":5173 vite · docs", actionTitle: L("Chiudi"), action: .killPorts([])),
+                    Alert(id: "hog", severity: 1, title: L("%@ usa molta CPU", "Safari"), detail: L("%@ da un po'", "140%"), actionTitle: L("Chiudi"), action: .openTab("apps"))]
         let speakers = AudioDevice(id: 1, uid: "demo-out", name: "Altoparlanti Mac", hasOutput: true, hasInput: false)
         let mic = AudioDevice(id: 2, uid: "demo-in", name: "Microfono MacBook", hasOutput: false, hasInput: true)
         m.outputDevices = [speakers]; m.inputDevices = [mic]; m.outputID = 1; m.inputID = 2; m.outputVolume = 0.62
         m.audioApps = [
-            AudioApp(key: "com.apple.Music", name: "Musica", icon: NSWorkspace.shared.icon(forFile: "/System/Applications/Music.app"), objects: [], playing: true, recording: false),
+            AudioApp(key: "com.apple.Music", name: L("Musica"), icon: NSWorkspace.shared.icon(forFile: "/System/Applications/Music.app"), objects: [], playing: true, recording: false),
             AudioApp(key: "com.apple.Safari", name: "Safari", icon: NSWorkspace.shared.icon(forFile: "/Applications/Safari.app"), objects: [], playing: true, recording: false),
             AudioApp(key: "com.apple.FaceTime", name: "FaceTime", icon: NSWorkspace.shared.icon(forFile: "/System/Applications/FaceTime.app"), objects: [], playing: false, recording: true),
         ]
@@ -155,7 +163,7 @@ final class FrameRecorder {
         window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: size.width, height: size.height),
                           styleMask: .borderless, backing: .buffered, defer: false)
         window.isOpaque = false; window.backgroundColor = .clear
-        window.appearance = NSAppearance(named: .darkAqua)
+        window.appearance = NSAppearance(named: Theme.dark ? .darkAqua : .aqua)
         window.contentView = host
         window.orderFrontRegardless()
         RunLoop.main.run(until: Date().addingTimeInterval(0.4))

@@ -4,7 +4,7 @@ import SwiftUI
 struct ModuleValue {
     let label: String
     let value: String
-    let fraction: Double?        // per colore "per carico" e grafici
+    let fraction: Double?        // per colore L("per carico") e grafici
     let history: [Double]
     var maxValue: Double? = 1
 }
@@ -12,23 +12,23 @@ struct ModuleValue {
 extension Monitor {
     func value(_ m: MenuModule, fahrenheit: Bool) -> ModuleValue {
         switch m {
-        case .cpu: return ModuleValue(label: "CPU", value: formatPercent(cpu), fraction: cpu, history: cpuHistory.values)
-        case .memory: return ModuleValue(label: "MEM", value: formatPercent(memory.fraction), fraction: memory.fraction, history: memHistory.values)
-        case .gpu: return ModuleValue(label: "GPU", value: gpu.map { formatPercent($0) } ?? "–", fraction: gpu, history: gpuHistory.values)
-        case .network: return ModuleValue(label: "NET", value: formatRate(down, compact: true), fraction: nil, history: downHistory.values, maxValue: nil)
+        case .cpu: return ModuleValue(label: L("CPU"), value: formatPercent(cpu), fraction: cpu, history: cpuHistory.values)
+        case .memory: return ModuleValue(label: L("MEM"), value: formatPercent(memory.fraction), fraction: memory.fraction, history: memHistory.values)
+        case .gpu: return ModuleValue(label: L("GPU"), value: gpu.map { formatPercent($0) } ?? "–", fraction: gpu, history: gpuHistory.values)
+        case .network: return ModuleValue(label: L("NET"), value: formatRate(down, compact: true), fraction: nil, history: downHistory.values, maxValue: nil)
         case .temperature:
             let t = sensors.socTemperature
-            return ModuleValue(label: "TEMP", value: t.map { formatTemp($0, fahrenheit: fahrenheit) } ?? "–", fraction: t.map { $0 / 100 },
+            return ModuleValue(label: L("TEMP"), value: t.map { formatTemp($0, fahrenheit: fahrenheit) } ?? "–", fraction: t.map { $0 / 100 },
                                history: tempHistory.values, maxValue: 110)
         case .power:
-            return ModuleValue(label: "PWR", value: sensors.systemPower.map { String(format: "%.0fW", $0) } ?? "–", fraction: nil,
+            return ModuleValue(label: L("PWR"), value: sensors.systemPower.map { String(format: L("%.0fW"), $0) } ?? "–", fraction: nil,
                                history: powerHistory.values, maxValue: nil)
-        case .disk: return ModuleValue(label: "SSD", value: formatPercent(disk.fraction), fraction: disk.fraction, history: [disk.fraction, disk.fraction])
+        case .disk: return ModuleValue(label: L("SSD"), value: formatPercent(disk.fraction), fraction: disk.fraction, history: [disk.fraction, disk.fraction])
         case .battery:
             let b = battery?.percent
-            return ModuleValue(label: "BAT", value: b.map { formatPercent($0) } ?? "–", fraction: b.map { 1 - $0 }, history: [])
-        case .ports: return ModuleValue(label: "PORTE", value: "\(ports.filter { !["ControlCenter", "rapportd", "sharingd"].contains($0.command) }.count)", fraction: nil, history: [])
-        case .agents: return ModuleValue(label: "AI", value: "\(agents.filter(\.isBusy).count)/\(agents.count)", fraction: nil, history: [])
+            return ModuleValue(label: L("BAT"), value: b.map { formatPercent($0) } ?? "–", fraction: b.map { 1 - $0 }, history: [])
+        case .ports: return ModuleValue(label: L("PORTE"), value: "\(ports.filter { !["ControlCenter", "rapportd", "sharingd"].contains($0.command) }.count)", fraction: nil, history: [])
+        case .agents: return ModuleValue(label: L("AI"), value: "\(agents.filter(\.isBusy).count)/\(agents.count)", fraction: nil, history: [])
         }
     }
 }
@@ -39,9 +39,9 @@ extension MenuModule {
     var widthTemplate: String {
         switch self {
         case .cpu, .memory, .gpu, .disk, .battery: "100%"
-        case .network: "↓999K"
+        case .network: L("↓999K")
         case .temperature: "100°"
-        case .power: "100W"
+        case .power: L("100W")
         case .ports: "99"
         case .agents: "9/9"
         }
