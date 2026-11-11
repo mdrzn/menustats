@@ -71,31 +71,51 @@ struct MenuBarPreview: View {
 struct BarSettings: View {
     @ObservedObject var s = Prefs.shared
     var accent: Color { s.accent }
-    let lookCols = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+    let lookCols = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
 
     var body: some View {
         Text(L("Barra dei menu")).font(.ui(18, .bold))
         MenuBarPreview(config: s.c, height: 34)
+
+        Card {
+            toggleRow(L("Elementi separati"), L("Un elemento per ogni voce: cliccandolo il pannello si apre sulla scheda giusta. Con ⌘ puoi trascinarli."), $s.c.separateItems)
+            Divider().opacity(0.4)
+            toggleRow(L("Modalità minima"), L("Solo un'icona, che diventa gialla o rossa quando c'è qualcosa da controllare."), $s.c.minimalMode)
+        }
 
         SectionLabel(L("Aspetto"))
         LazyVGrid(columns: lookCols, spacing: 8) {
             ForEach(MenuLook.allCases) { look in
                 Button { s.c.look = look } label: {
                     VStack(spacing: 6) {
-                        MenuBarView(config: { var p = s.c; p.look = look; p.modules = Array(s.c.modules.prefix(2)); return p }(), forceDark: true)
+                        MenuBarView(config: { var p = s.c; p.look = look; p.minimalMode = false; p.modules = Array(s.c.modules.filter { !$0.isIndicator }.prefix(1)); return p }(), forceDark: true)
                             .scaleEffect(0.9).frame(maxWidth: .infinity).frame(height: 24).clipped()
-                        Text(look.title).font(.ui(11, s.c.look == look ? .semibold : .medium))
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: "1E222B")))
+                        Text(look.title).font(.ui(10.5, s.c.look == look ? .semibold : .medium)).lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    .frame(maxWidth: .infinity).padding(.vertical, 9)
+                    .padding(6)
                     .background(RoundedRectangle(cornerRadius: 10).fill(s.c.look == look ? accent.opacity(0.12) : Theme.card))
                     .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(s.c.look == look ? accent.opacity(0.7) : Theme.stroke))
-                    .clipped()
                 }.buttonStyle(.plain)
             }
         }
 
         SectionLabel(L("Colore dei valori"))
         Segmented(options: ValueColor.allCases.map { ($0, $0.title) }, selection: $s.c.valueColor, accent: accent)
+        if s.c.valueColor == .load {
+            Card {
+                HStack {
+                    Text(L("Verde fino a")).font(.ui(11.5))
+                    Slider(value: $s.c.loadLow, in: 0.2...0.9, step: 0.05)
+                    Text(formatPercent(s.c.loadLow)).font(.number(11)).frame(width: 40, alignment: .trailing)
+                }
+                HStack {
+                    Text(L("Rosso oltre")).font(.ui(11.5))
+                    Slider(value: Binding(get: { s.c.loadHigh }, set: { s.c.loadHigh = max($0, s.c.loadLow + 0.05) }), in: 0.3...0.98, step: 0.05)
+                    Text(formatPercent(s.c.loadHigh)).font(.number(11)).frame(width: 40, alignment: .trailing)
+                }
+            }
+        }
         SectionLabel(L("Carattere"))
         Segmented(options: FontStyle.allCases.map { ($0, $0.title) }, selection: $s.c.font, accent: accent)
 
@@ -106,23 +126,45 @@ struct BarSettings: View {
                     Circle().fill(Color(hex: p.hex)).frame(width: 22, height: 22)
                         .overlay(Circle().strokeBorder(Theme.text, lineWidth: s.c.accent == p.hex ? 2 : 0))
                         .overlay(Circle().strokeBorder(.black.opacity(0.3), lineWidth: 0.5))
-                }.buttonStyle(.plain).help(p.name)
+                }.buttonStyle(.plain).help(L(p.name))
             }
             ColorPicker("", selection: Binding(get: { Color(hex: s.c.accent) }, set: { c in
                 if let n = NSColor(c).usingColorSpace(.sRGB) {
-                    s.c.accent = String(format: L("%02X%02X%02X"), Int(n.redComponent * 255), Int(n.greenComponent * 255), Int(n.blueComponent * 255))
+                    s.c.accent = String(format: "%02X%02X%02X", Int(n.redComponent * 255), Int(n.greenComponent * 255), Int(n.blueComponent * 255))
                 }
             }), supportsOpacity: false).labelsHidden()
             Spacer()
         }
 
-        SectionLabel(L("Elementi mostrati"))
+        HStack {
+            SectionLabel(L("Elementi mostrati"))
+            Spacer()
+            Toggle(L("Nascondi le etichette"), isOn: $s.c.hideLabels).toggleStyle(.checkbox).font(.ui(11))
+        }
         Card {
             VStack(spacing: 2) {
                 ForEach(orderedModules, id: \.self) { mod in moduleRow(mod) }
             }
         }
-        Text(L("Trascina l'ordine con le frecce. Temperatura e consumo usano sensori sperimentali.")).font(.ui(10.5)).foregroundStyle(Theme.tertiary)
+        Text(L("Ordina con le frecce; scrivi un'etichetta per sostituire quella predefinita. IP pubblico e ping contattano Internet (api.ipify.org e l'host del ping); temperatura e consumo usano sensori sperimentali."))
+            .font(.ui(10.5)).foregroundStyle(Theme.tertiary).fixedSize(horizontal: false, vertical: true)
+        if s.c.modules.contains(.ping) {
+            HStack {
+                Text(L("Host del ping")).font(.ui(11.5))
+                TextField("1.1.1.1", text: $s.c.pingHost).textFieldStyle(.roundedBorder).frame(width: 160)
+            }
+        }
+    }
+
+    func toggleRow(_ title: String, _ detail: String, _ v: Binding<Bool>) -> some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.ui(12, .medium))
+                Text(detail).font(.ui(10.5)).foregroundStyle(Theme.tertiary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer()
+            Toggle("", isOn: v).toggleStyle(.switch).labelsHidden().controlSize(.small)
+        }
     }
 
     // attivi nell'ordine scelto, poi gli altri
@@ -134,7 +176,14 @@ struct BarSettings: View {
         return HStack(spacing: 10) {
             Image(systemName: mod.symbol).font(.ui(12)).foregroundStyle(on ? accent : Theme.tertiary).frame(width: 18)
             Text(mod.title).font(.ui(12, .medium)).foregroundStyle(on ? Theme.text : Theme.secondary)
+            if mod.usesNetwork { Image(systemName: "network").font(.ui(9)).foregroundStyle(Theme.tertiary).help(L("Contatta Internet")) }
             Spacer()
+            if on && !mod.isIndicator && mod != .clock {
+                TextField(Monitor.shared.value(mod, fahrenheit: false).label, text: Binding(
+                    get: { s.c.labels[mod.rawValue] ?? "" },
+                    set: { s.c.labels[mod.rawValue] = $0.isEmpty ? nil : String($0.prefix(6)) }))
+                    .textFieldStyle(.roundedBorder).font(.ui(10.5)).frame(width: 64).help(L("Etichetta personalizzata"))
+            }
             if let i = idx {
                 IconButton(symbol: "chevron.up", help: L("Sposta a sinistra")) { if i > 0 { s.c.modules.swapAt(i, i - 1) } }.opacity(i > 0 ? 1 : 0.3)
                 IconButton(symbol: "chevron.down", help: L("Sposta a destra")) { if i < s.c.modules.count - 1 { s.c.modules.swapAt(i, i + 1) } }

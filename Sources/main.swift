@@ -11,30 +11,23 @@ final class PassthroughHostingView<V: View>: NSHostingView<V> {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSWindowDelegate {
     static weak var shared: AppDelegate?
-    var statusItem: NSStatusItem!
-    var hosting: PassthroughHostingView<MenuBarView>!
+    // Elementi nella barra: "all" (uno solo con tutti i moduli) oppure uno per modulo
+    var items: [(key: String, item: NSStatusItem, host: PassthroughHostingView<MenuBarView>)] = []
+    var anchor: NSStatusItem?          // elemento a cui e' agganciato il popover aperto
     let popover = NSPopover()
     var settingsWindow: NSWindow?
     var hotKeyRef: EventHotKeyRef?
+    var tabHotKeys: [EventHotKeyRef] = []
     var bag = Set<AnyCancellable>()
     let monitor = Monitor.shared
 
     func applicationDidFinishLaunching(_ n: Notification) {
         AppDelegate.shared = self
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = statusItem.button {
-            hosting = PassthroughHostingView(rootView: MenuBarView())
-            hosting.translatesAutoresizingMaskIntoConstraints = true
-            button.addSubview(hosting)
-            button.target = self
-            button.action = #selector(togglePopover)
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        }
-        resizeStatusItem()
-        // ad ogni aggiornamento la larghezza dell'elemento segue il contenuto
+        rebuildItems()
+        // ad ogni aggiornamento la larghezza degli elementi segue il contenuto
         monitor.objectWillChange.merge(with: Prefs.shared.objectWillChange)
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in DispatchQueue.main.async { self?.resizeStatusItem() } }
+            .sink { [weak self] _ in DispatchQueue.main.async { self?.resizeItems() } }
             .store(in: &bag)
 
         popover.behavior = .transient
@@ -54,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         installHotKeyHandler()
         registerHotKey()
         Prefs.shared.objectWillChange.receive(on: RunLoop.main)
-            .sink { [weak self] _ in DispatchQueue.main.async { self?.applyTheme() } }
+            .sink { [weak self] _ in DispatchQueue.main.async { self?.applyTheme(); self?.rebuildItems() } }
             .store(in: &bag)
     }
 
@@ -65,36 +58,75 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         if popover.contentSize != PopoverView.size { popover.contentSize = PopoverView.size }
     }
 
-    func resizeStatusItem() {
-        guard let hosting else { return }
-        let size = hosting.fittingSize
-        let w = ceil(size.width)
-        if abs((statusItem.length) - w) > 0.5 { statusItem.length = w }
-        let h = statusItem.button?.bounds.height ?? 22
-        hosting.frame = NSRect(x: 0, y: (h - size.height) / 2, width: w, height: size.height)
+    // Crea o ricrea gli elementi nella barra quando cambia la modalita' o l'elenco dei moduli
+    func rebuildItems() {
+        let c = Prefs.shared.c
+        let separate = c.separateItems && !c.minimalMode && !c.modules.isEmpty
+        let keys = separate ? c.modules.map(\.rawValue) : ["all"]
+        guard keys != items.map(\.key) else { return }
+        if popover.isShown { popover.performClose(nil) }
+        items.forEach { NSStatusBar.system.removeStatusItem($0.item) }
+        items.removeAll()
+        // macOS mette ogni nuovo elemento a sinistra dei precedenti: si creano dall'ultimo
+        for key in keys.reversed() {
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            let host = PassthroughHostingView(rootView: MenuBarView(only: MenuModule(rawValue: key)))
+            host.translatesAutoresizingMaskIntoConstraints = true
+            if let button = item.button {
+                button.addSubview(host)
+                button.target = self
+                button.action = #selector(itemClicked(_:))
+                button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            }
+            items.insert((key, item, host), at: 0)
+        }
+        resizeItems()
     }
 
+    func resizeItems() {
+        for (_, item, host) in items {
+            let size = host.fittingSize
+            let w = ceil(size.width)
+            if abs(item.length - w) > 0.5 { item.length = w }
+            let h = item.button?.bounds.height ?? 22
+            host.frame = NSRect(x: 0, y: (h - size.height) / 2, width: w, height: size.height)
+        }
+    }
+
+    @objc func itemClicked(_ sender: NSStatusBarButton) {
+        guard let entry = items.first(where: { $0.item.button === sender }) else { return }
+        if NSApp.currentEvent?.type == .rightMouseUp { showMenu(on: entry.item); return }
+        if let mod = MenuModule(rawValue: entry.key) { Nav.shared.tab = mod.tab }
+        if popover.isShown && anchor === entry.item { popover.performClose(nil); return }
+        show(from: entry.item)
+    }
+
+    // Scorciatoia: apre/chiude il popover sul primo elemento
     @objc func togglePopover() {
         if popover.isShown { popover.performClose(nil); return }
-        guard let button = statusItem.button else { return }
-        // clic destro: menu rapido
-        if NSApp.currentEvent?.type == .rightMouseUp { showMenu(); return }
+        if let first = items.first?.item { show(from: first) }
+    }
+
+    func show(from item: NSStatusItem) {
+        if popover.isShown { popover.performClose(nil) }
+        guard let button = item.button else { return }
+        anchor = item
         monitor.detailed = true
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
         NSApp.activate()
     }
 
-    func showMenu() {
+    func showMenu(on item: NSStatusItem) {
         let menu = NSMenu()
         menu.addItem(withTitle: L("Impostazioni…"), action: #selector(openSettings), keyEquivalent: ",").target = self
         let awake = menu.addItem(withTitle: monitor.awake.isActive ? L("Disattiva \"tieni sveglio\"") : L("Tieni sveglio il Mac"), action: #selector(toggleAwake), keyEquivalent: "")
         awake.target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: L("Esci da MenuStats"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        statusItem.menu = menu
-        statusItem.button?.performClick(nil)
-        statusItem.menu = nil
+        item.menu = menu
+        item.button?.performClick(nil)
+        item.menu = nil
     }
 
     @objc func toggleAwake() { monitor.awake.isActive ? monitor.awake.stop() : monitor.awake.start(minutes: nil) }

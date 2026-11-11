@@ -7,31 +7,47 @@ import CoreAudio
 
 // ================================================================ configurazione
 enum MenuModule: String, Codable, CaseIterable, Identifiable {
-    case cpu, memory, network, gpu, temperature, power, disk, battery, ports, agents
+    case cpu, memory, network, gpu, temperature, power, disk, diskFree, battery, ports, agents
+    case clock, publicIP, ping, uptime, awake, mic
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .cpu: L("CPU"); case .memory: L("Memoria"); case .network: L("Rete"); case .gpu: L("GPU")
-        case .temperature: L("Temperatura"); case .power: L("Consumo"); case .disk: L("Disco")
-        case .battery: L("Batteria"); case .ports: L("Porte"); case .agents: L("Agenti AI")
+        case .cpu: "CPU"; case .memory: L("Memoria"); case .network: L("Rete"); case .gpu: "GPU"
+        case .temperature: L("Temperatura"); case .power: L("Consumo"); case .disk: L("Disco (uso)")
+        case .diskFree: L("Disco (spazio libero)"); case .battery: L("Batteria"); case .ports: L("Porte"); case .agents: L("Agenti AI")
+        case .clock: L("Ora e data"); case .publicIP: L("IP pubblico"); case .ping: L("Ping")
+        case .uptime: L("Tempo di accensione"); case .awake: L("Tieni sveglio (indicatore)"); case .mic: L("Microfono in uso (indicatore)")
         }
     }
     var symbol: String {
         switch self {
         case .cpu: "cpu"; case .memory: "memorychip"; case .network: "arrow.up.arrow.down"; case .gpu: "square.stack.3d.up"
-        case .temperature: "thermometer.medium"; case .power: "bolt"; case .disk: "internaldrive"
+        case .temperature: "thermometer.medium"; case .power: "bolt"; case .disk: "internaldrive"; case .diskFree: "externaldrive"
         case .battery: "battery.75percent"; case .ports: "point.3.connected.trianglepath.dotted"; case .agents: "sparkles"
+        case .clock: "clock"; case .publicIP: "globe"; case .ping: "dot.radiowaves.left.and.right"; case .uptime: "power"
+        case .awake: "cup.and.saucer"; case .mic: "mic"
         }
     }
+    // Scheda del pannello che si apre cliccando l'elemento (modalita' elementi separati)
+    var tab: String {
+        switch self {
+        case .cpu, .gpu, .temperature, .power, .disk, .diskFree, .battery, .uptime, .memory: "system"
+        case .network, .publicIP, .ping: "network"
+        case .ports: "ports"; case .agents: "agents"; case .awake: "awake"; case .mic: "volume"; case .clock: "home"
+        }
+    }
+    // Elementi che contattano Internet: attivi solo se scelti esplicitamente
+    var usesNetwork: Bool { self == .publicIP || self == .ping }
 }
 
 // Aspetto degli elementi nella barra dei menu
 enum MenuLook: String, Codable, CaseIterable, Identifiable {
-    case stacked, compact, graph, pill, outline, icons
+    case stacked, compact, graph, columns, ring, bar, gauge, pill, outline, icons
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .stacked: L("Impilato"); case .compact: L("Compatto"); case .graph: L("Grafico")
+        case .stacked: L("Impilato"); case .compact: L("Compatto"); case .graph: L("Grafico"); case .columns: L("Colonne")
+        case .ring: L("Anello"); case .bar: L("Barra"); case .gauge: L("Tachimetro")
         case .pill: L("Pillola"); case .outline: L("Contorno"); case .icons: L("Icone")
         }
     }
@@ -74,6 +90,11 @@ struct Config: Codable, Equatable {
     var panelOpacity = 1.0                   // 1 opaco, 0.85 leggero, 0.7 vetro
     var areaColors = false
     var loadLow = 0.6, loadHigh = 0.85       // soglie del colore "per carico"
+    var separateItems = false                // un elemento per modulo nella barra
+    var labels: [String: String] = [:]       // etichette personalizzate per modulo
+    var hideLabels = false
+    var minimalMode = false                  // solo un'icona che cambia colore con gli avvisi
+    var pingHost = "1.1.1.1"
     var perAppVolume = false                 // sperimentale: chiede il permesso di registrare l'audio
 
     static func load() -> Config {
@@ -199,6 +220,12 @@ final class Monitor: ObservableObject {
     @Published var traffic: [AppTraffic] = []
     @Published var blockers: [SleepBlocker] = []
     @Published var alerts: [Alert] = []
+    @Published var publicIP: String?
+    @Published var pingMs: Double?
+    @Published var pingHistory = History(60)
+    @Published var micInUse = false
+    private var lastIPFetch = Date.distantPast
+    private var lastPing = Date.distantPast
     @Published var restarting: Set<String> = []          // app in fase di riavvio
     @Published var restartFailed: Set<String> = []       // non si sono chiuse da sole
 
@@ -265,9 +292,14 @@ final class Monitor: ObservableObject {
         if detailed || settings.c.modules.contains(.battery) { battery = .read() }
         if detailed || settings.c.modules.contains(.disk) { disk = .read() }
         thermal = ProcessInfo.processInfo.thermalState
+        let mods = settings.c.modules
+        if mods.contains(.publicIP) && Date().timeIntervalSince(lastIPFetch) > 600 { refreshPublicIP() }
+        if mods.contains(.ping) && Date().timeIntervalSince(lastPing) > 10 { refreshPing() }
+        if mods.contains(.mic) && !detailed { micInUse = MenuStats.audioApps().contains(where: \.recording) }
+        if mods.contains(.diskFree) && !detailed && detailTick % 15 == 0 { disk = .read() }
         detailTick += 1
         if detailed && detailTick % 3 == 0 { refreshDetails() }
-        else if !detailed && detailTick % 15 == 0 && (settings.c.modules.contains(.ports) || settings.c.modules.contains(.agents)) { refreshDetails() }
+        else if !detailed && detailTick % 15 == 0 && (settings.c.modules.contains(.ports) || settings.c.modules.contains(.agents) || settings.c.minimalMode) { refreshDetails() }
         if detailed && trafficVisible && detailTick % 3 == 0 { refreshTraffic() }
         if detailed { refreshAudioLevels() }
     }
@@ -295,6 +327,27 @@ final class Monitor: ObservableObject {
         }
     }
 
+    // IP pubblico (contatta api.ipify.org: solo se l'elemento e' attivo)
+    func refreshPublicIP() {
+        lastIPFetch = Date()
+        guard let url = URL(string: "https://api.ipify.org") else { return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            let ip = data.flatMap { String(data: $0, encoding: .utf8) }?.trimmingCharacters(in: .whitespacesAndNewlines)
+            DispatchQueue.main.async { if let ip, !ip.isEmpty, ip.count < 46 { self?.publicIP = ip } }
+        }.resume()
+    }
+
+    // Ping verso pingHost (un pacchetto ogni 10 s, solo se l'elemento e' attivo)
+    func refreshPing() {
+        lastPing = Date()
+        let host = settings.c.pingHost
+        work.async { [weak self] in
+            let out = run("/sbin/ping", ["-c", "1", "-t", "2", host], timeout: 3) ?? ""
+            let ms = out.range(of: "time=").flatMap { r in Double(out[r.upperBound...].prefix { $0.isNumber || $0 == "." }) }
+            DispatchQueue.main.async { self?.pingMs = ms; if let ms { self?.pingHistory.add(ms) } }
+        }
+    }
+
     func refreshTraffic() {
         guard !Monitor.demoMode else { return }
         work.async { [weak self] in
@@ -313,6 +366,7 @@ final class Monitor: ObservableObject {
         outputID = newOut
         inputID = defaultDevice(input: true)
         audioApps = MenuStats.audioApps()
+        micInUse = audioApps.contains(where: \.recording)
         refreshAudioLevels()
         applyMixer(rebuild: rebuild && outputChanged)
     }

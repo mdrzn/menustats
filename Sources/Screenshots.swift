@@ -17,8 +17,8 @@ enum Screenshots {
             Nav.shared.tab = tab
             save(PopoverView(), size: CGSize(width: 480, height: 620), to: out.appendingPathComponent("tab-\(tab).png"), rounded: 14)
         }
-        save(LooksSheet(), size: CGSize(width: 560, height: 6 * 46 + 16), to: out.appendingPathComponent("looks.png"), rounded: 12)
-        save(SettingsView(), size: CGSize(width: 640, height: 560), to: out.appendingPathComponent("settings.png"), rounded: 12)
+        save(LooksSheet(), size: CGSize(width: 560, height: CGFloat(MenuLook.allCases.count) * 46 + 16), to: out.appendingPathComponent("looks.png"), rounded: 12)
+        save(SettingsView(), size: CGSize(width: 640, height: 600), to: out.appendingPathComponent("settings.png"), rounded: 12)
         save(AppLogo(size: 256).padding(0), size: CGSize(width: 256, height: 256), to: out.appendingPathComponent("logo.png"), rounded: 0, opaque: false)
         print("ok \(out.path)")
     }
@@ -143,6 +143,7 @@ struct LooksSheet: View {
             }
         }
         .padding(8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Theme.background)
     }
 }
