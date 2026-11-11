@@ -347,11 +347,12 @@ struct AppsTab: View {
             else { inspected = inspected == g.mainPID ? nil : g.mainPID }
         }
         .contextMenu {
+            if g.bundlePath != nil { Button("Riavvia") { m.restart(g) } }
             Button("Esci") { terminate(g, force: false) }
             Button("Forza uscita") { terminate(g, force: true) }
             if let b = g.bundlePath { Button("Mostra nel Finder") { NSWorkspace.shared.selectFile(b, inFileViewerRootedAtPath: "") } }
         }
-        if g.processes.count == 1, inspected == g.mainPID { ProcessInspector(pid: g.mainPID).padding(.leading, 22) }
+        if g.processes.count == 1, inspected == g.mainPID { ProcessInspector(pid: g.mainPID, group: g).padding(.leading, 22) }
         if open {
             ForEach(g.processes.sorted { $0.cpu > $1.cpu }.prefix(25)) { p in
                 HoverRow {
@@ -368,7 +369,7 @@ struct AppsTab: View {
                     Button("Termina") { killProcess(p.pid) }
                     Button("Forza chiusura") { killProcess(p.pid, force: true) }
                 }
-                if inspected == p.pid { ProcessInspector(pid: p.pid).padding(.leading, 30) }
+                if inspected == p.pid { ProcessInspector(pid: p.pid, group: g).padding(.leading, 30) }
             }
         }
     }
@@ -377,6 +378,8 @@ struct AppsTab: View {
 // Dettagli di un processo: firma, team, runtime protetto, sandbox, architettura
 struct ProcessInspector: View {
     let pid: pid_t
+    var group: AppGroup? = nil
+    @ObservedObject var m = Monitor.shared
     @Local private var sig: SignatureInfo?
     @Local private var info: ProcessSample?
     var body: some View {
@@ -400,6 +403,7 @@ struct ProcessInspector: View {
             } else {
                 ProgressView().controlSize(.small)
             }
+            if let g = group { actions(g) }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -412,6 +416,22 @@ struct ProcessInspector: View {
             info = Monitor.shared.processes.first { $0.pid == p }
         }
     }
+    // Azioni sull'intera app (tutti i suoi processi)
+    @ViewBuilder func actions(_ g: AppGroup) -> some View {
+        HStack(spacing: 6) {
+            if g.bundlePath != nil {
+                PillButton(title: m.restarting.contains(g.key) ? "Riavvio…" : "Riavvia", color: Prefs.shared.accent, prominent: true) { m.restart(g) }
+            }
+            PillButton(title: "Esci") { terminate(g, force: false); m.refreshDetails() }
+            PillButton(title: "Forza uscita", color: Theme.danger) { terminate(g, force: true); m.refreshDetails() }
+            Spacer()
+            if m.restartFailed.contains(g.key) {
+                Text("non si è chiusa: controlla se chiede di salvare").font(.ui(9.5)).foregroundStyle(Theme.warning).lineLimit(1)
+            }
+        }
+        .padding(.top, 2)
+    }
+
     func mini(_ k: String, _ v: String) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(k).font(.ui(9)).foregroundStyle(Theme.tertiary)

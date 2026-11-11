@@ -233,6 +233,29 @@ func signatureInfo(pid: pid_t) -> SignatureInfo {
 }
 
 // ================================================================ azioni
+// Riavvio: chiusura normale (come ⌘Q), attesa della chiusura effettiva, riapertura.
+// Se l'app non si chiude entro 15 s (documenti non salvati, dialoghi) non la forza e non la riapre.
+func relaunch(_ g: AppGroup, done: @escaping (Bool) -> Void) {
+    guard let path = g.bundlePath else { done(false); return }
+    let url = URL(fileURLWithPath: path)
+    let id = Bundle(url: url)?.bundleIdentifier
+    var targets = id.map { NSRunningApplication.runningApplications(withBundleIdentifier: $0) } ?? []
+    if targets.isEmpty, let a = NSRunningApplication(processIdentifier: g.mainPID) { targets = [a] }
+    guard !targets.isEmpty else { done(false); return }
+    targets.forEach { $0.terminate() }
+    DispatchQueue.global().async {
+        let deadline = Date().addingTimeInterval(15)
+        while Date() < deadline && targets.contains(where: { !$0.isTerminated }) { usleep(100_000) }
+        let closed = targets.allSatisfy(\.isTerminated)
+        DispatchQueue.main.async {
+            guard closed else { done(false); return }
+            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration()) { _, err in
+                DispatchQueue.main.async { done(err == nil) }
+            }
+        }
+    }
+}
+
 func terminate(_ g: AppGroup, force: Bool) {
     if let app = NSRunningApplication(processIdentifier: g.mainPID), app.bundleURL != nil {
         _ = force ? app.forceTerminate() : app.terminate()

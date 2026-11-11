@@ -169,6 +169,8 @@ final class Monitor: ObservableObject {
     @Published var traffic: [AppTraffic] = []
     @Published var blockers: [SleepBlocker] = []
     @Published var alerts: [Alert] = []
+    @Published var restarting: Set<String> = []          // app in fase di riavvio
+    @Published var restartFailed: Set<String> = []       // non si sono chiuse da sole
 
     // audio
     @Published var audioApps: [AudioApp] = []
@@ -337,6 +339,16 @@ final class Monitor: ObservableObject {
                              actionTitle: orphans.count == 1 ? "Chiudi" : "Chiudi \(orphans.count)", action: .killPorts(orphans)))
         }
         alerts = out
+    }
+
+    func restart(_ g: AppGroup) {
+        guard !restarting.contains(g.key) else { return }
+        restarting.insert(g.key); restartFailed.remove(g.key)
+        relaunch(g) { [weak self] ok in
+            self?.restarting.remove(g.key)
+            if !ok { self?.restartFailed.insert(g.key) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self?.refreshDetails() }
+        }
     }
 
     func perform(_ a: Alert.Action, openTab: (String) -> Void) {
