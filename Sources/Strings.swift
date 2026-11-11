@@ -225,4 +225,5 @@ private let english: [String: String] = [
     "Salva le impostazioni in un file o caricale su un altro Mac.": "Save your settings to a file or load them on another Mac.",
     "Esporta…": "Export…",
     "Importa…": "Import…",
+    "Fatto: la pagina di checkout ora controlla il CAP e i test passano. Apro una pull request?": "Done: the checkout page now validates the postcode and the tests pass. Shall I open a pull request?",
 ]

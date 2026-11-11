@@ -17,6 +17,13 @@ enum Screenshots {
             Nav.shared.tab = tab
             save(PopoverView(), size: CGSize(width: 480, height: 620), to: out.appendingPathComponent("tab-\(tab).png"), rounded: 14)
         }
+        let current = Prefs.shared.c.theme
+        for t in [ThemeChoice.graphite, .midnight, .paper, .contrast] {
+            Prefs.shared.c.theme = t
+            Nav.shared.tab = "home"
+            save(PopoverView(), size: CGSize(width: 480, height: 620), to: out.appendingPathComponent("theme-\(t.rawValue).png"), rounded: 14)
+        }
+        Prefs.shared.c.theme = current
         save(LooksSheet(), size: CGSize(width: 560, height: CGFloat(MenuLook.allCases.count) * 46 + 16), to: out.appendingPathComponent("looks.png"), rounded: 12)
         save(SettingsView(), size: CGSize(width: 640, height: 600), to: out.appendingPathComponent("settings.png"), rounded: 12)
         save(AppLogo(size: 256).padding(0), size: CGSize(width: 256, height: 256), to: out.appendingPathComponent("logo.png"), rounded: 0, opaque: false)
@@ -107,6 +114,12 @@ enum Screenshots {
             AgentSession(pid: 702, kind: "Codex", cwd: NSHomeDirectory() + "/code/shop-backend", startedAt: Date().addingTimeInterval(-1_300),
                          cpu: 0.3, memory: 210 << 20, children: 2, ports: [4000], terminal: "Ghostty"),
         ]
+        var info = ClaudeSessionInfo(file: "")
+        info.model = "claude-opus-5-5"
+        info.inputTokens = 18_400; info.outputTokens = 212_000; info.cacheReadTokens = 9_800_000; info.cacheWriteTokens = 640_000
+        info.lastText = L("Fatto: la pagina di checkout ora controlla il CAP e i test passano. Apro una pull request?")
+        info.lastActivity = Date()
+        m.agents[0].claude = info
         m.containers = [Container(id: "a1", name: "postgres", image: "postgres:17", status: "Up 3 hours", running: true, ports: "", hostPorts: [5432]),
                         Container(id: "a2", name: "redis", image: "redis:7-alpine", status: "Exited", running: false, ports: "", hostPorts: [])]
         m.traffic = [AppTraffic(name: "Safari", down: 1_420_000, up: 41_000), AppTraffic(name: L("Musica"), down: 320_000, up: 6_000),
@@ -214,6 +227,7 @@ extension Screenshots {
         Prefs.persist = false
         Monitor.demoMode = true
         let m = Monitor.shared
+        applyArgs()
         fillDemo(m)
         var t = 0
         func scene(_ name: String) -> URL {

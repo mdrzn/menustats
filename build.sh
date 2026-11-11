@@ -5,7 +5,7 @@
 set -e
 cd "$(dirname "$0")"
 APP=MenuStats.app
-VERSION=0.1
+VERSION=0.2
 rm -rf "$APP" build; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" build
 BIN="$APP/Contents/MacOS/MenuStats"
 compile() {   # compile <arch>

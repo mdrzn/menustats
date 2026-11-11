@@ -3,4 +3,4 @@
 set -e
 cd "$(dirname "$0")"
 [ -d MenuStats.app ] || ./build.sh
-./MenuStats.app/Contents/MacOS/MenuStats --screenshots docs
+./MenuStats.app/Contents/MacOS/MenuStats --screenshots docs --lang en --theme graphite

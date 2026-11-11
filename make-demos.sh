@@ -6,7 +6,7 @@ set -e
 cd "$(dirname "$0")"
 [ -d MenuStats.app ] || ./build.sh
 rm -rf build/demo; mkdir -p build/demo docs
-./MenuStats.app/Contents/MacOS/MenuStats --gifs build/demo
+./MenuStats.app/Contents/MacOS/MenuStats --gifs build/demo --lang en --theme graphite
 for d in build/demo/*/; do
   name=$(basename "$d")
   img2webp -loop 0 -d 100 -mixed -q 82 -m 5 "$d"*.png -o "docs/$name.webp" >/dev/null 2>&1
