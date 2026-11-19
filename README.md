@@ -95,7 +95,7 @@ open MenuStats.app
 - `./make-screenshots.sh` and `./make-demos.sh` regenerate the images and animations above with demo data (`make-demos.sh` needs `img2webp`: `brew install webp`).
 - `./make-icon.sh` regenerates the app icon.
 
-MenuStats checks GitHub once a day for a newer release and shows a banner in the panel footer (can be turned off).
+MenuStats checks GitHub once a day for a newer release, downloads it, replaces itself in place (the old copy goes to the Trash) and restarts — never while the panel is open. Both checking and automatic installing can be turned off in *Settings → General*; with automatic installing off, the panel footer shows an *Update and restart* button.
 
 ## Experimental features — please read
 
@@ -111,7 +111,7 @@ MenuStats only contacts the Internet for things you can see and switch off:
 
 | What | Where | When |
 |---|---|---|
-| Update check | `api.github.com` | once a day; *Settings → General* |
+| Update check and download | `api.github.com`, `github.com` | once a day; *Settings → General* |
 | Public IP | `api.ipify.org` | only if you add the *Public IP* item |
 | Ping | the host you choose (default `1.1.1.1`) | only if you add the *Ping* item |
 | Speed test | Apple's servers via `networkQuality` | only when you click *Run test* |

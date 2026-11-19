@@ -114,12 +114,21 @@ struct Footer: View {
     let accent: Color
     var body: some View {
         VStack(spacing: 0) {
-            if let v = updater.latest, let url = updater.url {
+            if let v = updater.latest {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.down.circle.fill").foregroundStyle(accent)
-                    Text(L("È disponibile MenuStats %@", v)).font(.ui(11, .medium))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(L("È disponibile MenuStats %@", v)).font(.ui(11, .medium))
+                        if let e = updater.error { Text(e).font(.ui(9.5)).foregroundStyle(Theme.warning).lineLimit(1) }
+                    }
                     Spacer()
-                    PillButton(title: L("Scarica"), color: accent, prominent: true) { NSWorkspace.shared.open(url) }
+                    if updater.installing {
+                        ProgressView().controlSize(.small)
+                        Text(L("Aggiornamento…")).font(.ui(10.5)).foregroundStyle(Theme.secondary)
+                    } else {
+                        if let url = updater.url { IconButton(symbol: "doc.text", help: L("Novità")) { NSWorkspace.shared.open(url) } }
+                        PillButton(title: L("Aggiorna e riavvia"), color: accent, prominent: true) { updater.install() }
+                    }
                 }
                 .padding(.horizontal, 12).padding(.vertical, 6)
                 .background(accent.opacity(0.1))

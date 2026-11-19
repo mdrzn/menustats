@@ -100,6 +100,7 @@ struct Config: Codable, Equatable {
     var awakeWhenAgents = false, awakeWhenServers = false, awakeOnAC = false
     var tabHotkeys = true                    // ⌥⌘1…8 aprono le schede
     var checkUpdates = true                  // controlla le nuove versioni su GitHub (una volta al giorno)
+    var autoInstallUpdates = true            // e le installa da solo, riavviandosi (mai a pannello aperto)
     var perAppVolume = false                 // sperimentale: chiede il permesso di registrare l'audio
 
     static func load() -> Config {

@@ -285,6 +285,8 @@ struct GeneralSettings: View {
                 .toggleStyle(.switch).labelsHidden().controlSize(.small) }
             row(L("Controlla gli aggiornamenti")) { Toggle("", isOn: Binding(get: { s.c.checkUpdates }, set: { s.c.checkUpdates = $0; if $0 { Updater.shared.check() } }))
                 .toggleStyle(.switch).labelsHidden().controlSize(.small) }
+            row(L("Installa gli aggiornamenti automaticamente")) { Toggle("", isOn: $s.c.autoInstallUpdates)
+                .toggleStyle(.switch).labelsHidden().controlSize(.small).disabled(!s.c.checkUpdates) }
             row(L("Apri il pannello con ⌥⌘M")) { Toggle("", isOn: Binding(get: { s.c.hotkeyEnabled }, set: { s.c.hotkeyEnabled = $0; AppDelegate.shared?.registerHotKey() }))
                 .toggleStyle(.switch).labelsHidden().controlSize(.small) }
         }
